@@ -43,19 +43,19 @@ def get_llm(
     google_key = os.getenv("GOOGLE_API_KEY")
 
     # High-performance Groq model candidate list
-    candidate_models = ["qwen/qwen3.6-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    candidate_models = ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b", "openai/gpt-oss-120b"]
 
     fallbacks: List[BaseChatModel] = []
     if groq_key:
         try:
             from langchain_groq import ChatGroq
 
-            selected_model = model_name or "qwen/qwen3.6-27b"
+            selected_model = model_name or "qwen/qwen3.8-27b"
             groq_primary = ChatGroq(
                 model=selected_model,
                 temperature=temperature,
                 api_key=groq_key,
-                max_retries=4,
+                max_retries=3,
                 request_timeout=20.0,
             )
 
@@ -66,7 +66,7 @@ def get_llm(
                         model=alt,
                         temperature=temperature,
                         api_key=groq_key,
-                        max_retries=4,
+                        max_retries=3,
                         request_timeout=20.0,
                     ))
         except Exception:
@@ -95,7 +95,7 @@ def get_llm(
     # Fallback instantiation
     from langchain_groq import ChatGroq
     return ChatGroq(
-        model=model_name or "qwen/qwen3.6-27b",
+        model=model_name or "qwen/qwen3.8-27b",
         temperature=temperature,
         api_key=groq_key or "mock_key",
     )

@@ -124,7 +124,7 @@ class HighLevelAgent:
     ) -> Generator[Dict[str, Any], None, None]:
         """
         True token-by-token streaming generator with execution trace events.
-        Accepts either `query` (canonical) or `question` (alias).
+        Canonical: `query: str`. Compatibility alias: `question: str`.
         Yields events:
         - {"type": "stage", "stage": "...", "detail": "..."}
         - {"type": "tool_start", "name": "...", "args": {...}}
@@ -132,7 +132,12 @@ class HighLevelAgent:
         - {"type": "token", "content": "..."}
         - {"type": "complete", "output": "...", "telemetry": {...}}
         """
-        prompt = query if query is not None else (question or "")
+        if query is not None and question is not None:
+            raise ValueError("Provide either 'query' or 'question', not both.")
+        prompt = query if query is not None else question
+        if not prompt:
+            raise ValueError("A query or question is required.")
+
         t0 = time.perf_counter()
         ttft_recorded = False
         t_ttft = 0.0
@@ -239,7 +244,11 @@ class HighLevelAgent:
         question: Optional[str] = None,
     ) -> str:
         """Standard synchronous invocation returning final answer text."""
-        prompt = query if query is not None else (question or "")
+        if query is not None and question is not None:
+            raise ValueError("Provide either 'query' or 'question', not both.")
+        prompt = query if query is not None else question
+        if not prompt:
+            raise ValueError("A query or question is required.")
         res = self.invoke_with_trace(query=prompt, user_id=user_id, thread_id=thread_id)
         return res.get("output", "")
 
@@ -253,9 +262,13 @@ class HighLevelAgent:
     ) -> Dict[str, Any]:
         """
         Synchronous invocation returning structured output with latency metrics.
-        Accepts either `query` (canonical) or `question` (alias).
+        Canonical: `query: str`. Compatibility alias: `question: str`.
         """
-        prompt = query if query is not None else (question or "")
+        if query is not None and question is not None:
+            raise ValueError("Provide either 'query' or 'question', not both.")
+        prompt = query if query is not None else question
+        if not prompt:
+            raise ValueError("A query or question is required.")
         t0 = time.perf_counter()
         t_mem_start = time.perf_counter()
         user_memories = []

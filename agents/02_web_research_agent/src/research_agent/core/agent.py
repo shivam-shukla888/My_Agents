@@ -58,15 +58,27 @@ class WebResearchAgent:
             system_prompt=SYSTEM_PROMPT,
         )
 
-    def ask(self, question: Optional[str] = None, *, query: Optional[str] = None) -> str:
+    def ask(self, query: Optional[str] = None, *, question: Optional[str] = None) -> str:
         """Execute a research query and return answer."""
-        prompt = question if question is not None else (query or "")
-        res = self.invoke_with_trace(prompt)
+        if query is not None and question is not None:
+            raise ValueError("Provide either 'query' or 'question', not both.")
+        prompt = query if query is not None else question
+        if not prompt:
+            raise ValueError("A query or question is required.")
+        res = self.invoke_with_trace(query=prompt)
         return res["output"]
 
-    def invoke_with_trace(self, question: Optional[str] = None, *, query: Optional[str] = None) -> Dict[str, Any]:
-        """Execute query with tool execution logs. Accepts `question` or `query`."""
-        prompt = question if question is not None else (query or "")
+    def invoke_with_trace(self, query: Optional[str] = None, *, question: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Execute query with tool execution logs.
+        Canonical: `query: str`. Compatibility alias: `question: str`.
+        """
+        if query is not None and question is not None:
+            raise ValueError("Provide either 'query' or 'question', not both.")
+        prompt = query if query is not None else question
+        if not prompt:
+            raise ValueError("A query or question is required.")
+
         response_state = self.agent_graph.invoke({"messages": [HumanMessage(content=prompt)]})
         all_msgs = response_state.get("messages", [])
 

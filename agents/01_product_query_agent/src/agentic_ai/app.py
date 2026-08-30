@@ -396,7 +396,7 @@ if st.session_state.active_view == "💬 Chat Workspace":
 
             # Execute real token-by-token streaming
             for event in agent_instance.stream_with_trace(
-                question=prompt_to_execute,
+                query=prompt_to_execute,
                 user_id=user_id,
                 thread_id=thread_id,
             ):

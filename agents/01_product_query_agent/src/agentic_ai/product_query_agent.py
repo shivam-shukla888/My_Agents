@@ -9,7 +9,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+
+try:
+    from langchain_groq import ChatGroq
+except ImportError:
+    # langchain_groq not installed; ChatGroq used only in get_groq_llm()
+    ChatGroq = None
+
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 

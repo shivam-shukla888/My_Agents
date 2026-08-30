@@ -455,7 +455,7 @@ if st.session_state.active_view == "💬 Chat Workspace":
                 
                 # Execute agent query
                 res = agent_instance.invoke_with_trace(
-                    question=prompt_to_execute,
+                    query=prompt_to_execute,
                     user_id=user_id,
                     thread_id=thread_id,
                 )

@@ -62,7 +62,7 @@ class AgentCommunicationBus:
             if hasattr(agent_obj, "ask"):
                 response_text = agent_obj.ask(task_instruction)
             elif hasattr(agent_obj, "invoke_with_trace"):
-                res = agent_obj.invoke_with_trace(task_instruction)
+                res = agent_obj.invoke_with_trace(query=task_instruction)
                 response_text = res.get("output", str(res))
             else:
                 response_text = str(agent_obj(task_instruction))

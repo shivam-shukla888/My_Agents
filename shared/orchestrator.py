@@ -92,7 +92,7 @@ class MultiAgentNetwork:
 
         # Step 1: Agent 01 analyzes product options
         step1_res = self.agent_01.invoke_with_trace(
-            question=f"Analyze available products, specifications, and prices for: {goal}"
+            query=f"Analyze available products, specifications, and prices for: {goal}"
         )
         workflow_trace.append({
             "step": 1,
@@ -103,7 +103,7 @@ class MultiAgentNetwork:
 
         # Step 2: Agent 02 conducts competitor price research & market validation
         step2_res = self.agent_02.invoke_with_trace(
-            question=f"Based on the product options ({goal}), research competitor retail prices (Amazon, Best Buy, B&H) and summarize deals."
+            query=f"Based on the product options ({goal}), research competitor retail prices (Amazon, Best Buy, B&H) and summarize deals."
         )
         workflow_trace.append({
             "step": 2,
@@ -114,7 +114,7 @@ class MultiAgentNetwork:
 
         # Step 3: Agent 03 analyzes historical sales velocity & stockout health
         step3_res = self.agent_03.invoke_with_trace(
-            question="Analyze sales performance, category revenue, and stockout risks related to this product category."
+            query="Analyze sales performance, category revenue, and stockout risks related to this product category."
         )
         workflow_trace.append({
             "step": 3,
