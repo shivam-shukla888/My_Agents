@@ -116,12 +116,15 @@ class HighLevelAgent:
 
     def stream_with_trace(
         self,
-        query: str,
+        query: Optional[str] = None,
         user_id: str = "default_user",
         thread_id: str = "default_thread",
+        *,
+        question: Optional[str] = None,
     ) -> Generator[Dict[str, Any], None, None]:
         """
         True token-by-token streaming generator with execution trace events.
+        Accepts either `query` (canonical) or `question` (alias).
         Yields events:
         - {"type": "stage", "stage": "...", "detail": "..."}
         - {"type": "tool_start", "name": "...", "args": {...}}
@@ -129,6 +132,7 @@ class HighLevelAgent:
         - {"type": "token", "content": "..."}
         - {"type": "complete", "output": "...", "telemetry": {...}}
         """
+        prompt = query if query is not None else (question or "")
         t0 = time.perf_counter()
         ttft_recorded = False
         t_ttft = 0.0
@@ -151,7 +155,7 @@ class HighLevelAgent:
         if user_memories:
             memory_context = f"\n[User Persistent Preferences]:\n" + "\n".join(f"- {m}" for m in user_memories[:3])
 
-        augmented_query = query + memory_context if memory_context else query
+        augmented_query = prompt + memory_context if memory_context else prompt
         config = {"configurable": {"thread_id": thread_id}}
         messages = [HumanMessage(content=augmented_query)]
 
@@ -228,23 +232,30 @@ class HighLevelAgent:
 
     def ask(
         self,
-        query: str,
+        query: Optional[str] = None,
         user_id: str = "default_user",
         thread_id: str = "default_thread",
+        *,
+        question: Optional[str] = None,
     ) -> str:
         """Standard synchronous invocation returning final answer text."""
-        res = self.invoke_with_trace(query, user_id=user_id, thread_id=thread_id)
+        prompt = query if query is not None else (question or "")
+        res = self.invoke_with_trace(query=prompt, user_id=user_id, thread_id=thread_id)
         return res.get("output", "")
 
     def invoke_with_trace(
         self,
-        query: str,
+        query: Optional[str] = None,
         user_id: str = "default_user",
         thread_id: str = "default_thread",
+        *,
+        question: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Synchronous invocation returning structured output with latency metrics.
+        Accepts either `query` (canonical) or `question` (alias).
         """
+        prompt = query if query is not None else (question or "")
         t0 = time.perf_counter()
         t_mem_start = time.perf_counter()
         user_memories = []
@@ -258,7 +269,7 @@ class HighLevelAgent:
         if user_memories:
             memory_context = f"\n[User Persistent Preferences]:\n" + "\n".join(f"- {m}" for m in user_memories[:3])
 
-        augmented_query = query + memory_context if memory_context else query
+        augmented_query = prompt + memory_context if memory_context else prompt
         config = {"configurable": {"thread_id": thread_id}}
         messages = [HumanMessage(content=augmented_query)]
 

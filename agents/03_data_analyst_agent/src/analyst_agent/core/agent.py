@@ -58,14 +58,16 @@ class DataAnalystAgent:
             system_prompt=SYSTEM_PROMPT,
         )
 
-    def ask(self, question: str) -> str:
+    def ask(self, question: Optional[str] = None, *, query: Optional[str] = None) -> str:
         """Execute a data analysis query and return answer."""
-        res = self.invoke_with_trace(question)
+        prompt = question if question is not None else (query or "")
+        res = self.invoke_with_trace(prompt)
         return res["output"]
 
-    def invoke_with_trace(self, question: str) -> Dict[str, Any]:
-        """Execute query with tool execution logs."""
-        response_state = self.agent_graph.invoke({"messages": [HumanMessage(content=question)]})
+    def invoke_with_trace(self, question: Optional[str] = None, *, query: Optional[str] = None) -> Dict[str, Any]:
+        """Execute query with tool execution logs. Accepts `question` or `query`."""
+        prompt = question if question is not None else (query or "")
+        response_state = self.agent_graph.invoke({"messages": [HumanMessage(content=prompt)]})
         all_msgs = response_state.get("messages", [])
 
         final_answer = ""

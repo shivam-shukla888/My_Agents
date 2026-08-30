@@ -1,6 +1,6 @@
 """
 Configuration and Multi-Provider LLM Factory with Ultra-Low Latency & Multi-Model Cascading Fallbacks.
-Primary: Ultra-Fast Groq LPUs (openai/gpt-oss-120b, qwen/qwen3.6-27b, groq/compound, groq/compound-mini).
+Primary: Ultra-Fast Groq LPUs (qwen/qwen3.6-27b, openai/gpt-oss-120b, openai/gpt-oss-20b).
 """
 
 import os
@@ -30,7 +30,7 @@ def get_llm(
 
     Args:
         provider: 'groq', 'primary', or 'google' / 'gemini'.
-        model_name: Specific model ID (defaults to 'openai/gpt-oss-120b').
+        model_name: Specific model ID (defaults to 'qwen/qwen3.6-27b').
         temperature: Sampling temperature (0.0 for deterministic tool execution).
         api_key: Optional API key override.
 
@@ -43,20 +43,20 @@ def get_llm(
     google_key = os.getenv("GOOGLE_API_KEY")
 
     # High-performance Groq model candidate list
-    candidate_models = ["openai/gpt-oss-120b", "qwen/qwen3.6-27b", "groq/compound", "groq/compound-mini"]
+    candidate_models = ["qwen/qwen3.6-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
 
     fallbacks: List[BaseChatModel] = []
     if groq_key:
         try:
             from langchain_groq import ChatGroq
 
-            selected_model = model_name or "openai/gpt-oss-120b"
+            selected_model = model_name or "qwen/qwen3.6-27b"
             groq_primary = ChatGroq(
                 model=selected_model,
                 temperature=temperature,
                 api_key=groq_key,
-                max_retries=1,
-                request_timeout=12.0,
+                max_retries=4,
+                request_timeout=20.0,
             )
 
             # Build resilient fallback chain from alternate models
@@ -66,8 +66,8 @@ def get_llm(
                         model=alt,
                         temperature=temperature,
                         api_key=groq_key,
-                        max_retries=1,
-                        request_timeout=12.0,
+                        max_retries=4,
+                        request_timeout=20.0,
                     ))
         except Exception:
             groq_primary = None
@@ -95,7 +95,7 @@ def get_llm(
     # Fallback instantiation
     from langchain_groq import ChatGroq
     return ChatGroq(
-        model=model_name or "openai/gpt-oss-120b",
+        model=model_name or "qwen/qwen3.6-27b",
         temperature=temperature,
         api_key=groq_key or "mock_key",
     )
