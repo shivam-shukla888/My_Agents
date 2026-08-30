@@ -1,7 +1,7 @@
 """
 🌐 My Agents: Enterprise Multi-Agent AI Studio
-World-Class SaaS UI with Progressive Execution, Real 3D Assets, Inter-Agent Mesh,
-ChromaDB Persistent Memory & 3-Pillar Evals Benchmark.
+World-Class SaaS UI with Real Token Streaming, Progressive Execution, Real 3D Assets,
+Inter-Agent Mesh, ChromaDB Persistent Memory & 3-Pillar Evals Benchmark.
 """
 
 import os
@@ -52,7 +52,6 @@ st.markdown("""
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <style>
-    /* CSS Variables Design Tokens */
     :root {
         --bg-primary: #0B0F14;
         --bg-secondary: #111720;
@@ -76,7 +75,6 @@ st.markdown("""
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Top Bar Header */
     .top-bar {
         display: flex;
         justify-content: space-between;
@@ -125,7 +123,6 @@ st.markdown("""
         box-shadow: 0 0 8px #22C55E;
     }
 
-    /* Tool Call Chips */
     .tool-chip {
         display: inline-flex;
         align-items: center;
@@ -141,7 +138,6 @@ st.markdown("""
         margin-bottom: 6px;
     }
 
-    /* Sidebar Clean Styling */
     section[data-testid="stSidebar"] {
         background-color: var(--bg-secondary) !important;
         border-right: 1px solid var(--border-subtle) !important;
@@ -196,13 +192,10 @@ with st.sidebar:
 
     st.markdown("---")
     with st.expander("⚙️ LLM Engine & Routing", expanded=False):
-        prov_select = st.radio("Provider", ["Primary (Ultra Fast)", "Groq LPU Direct", "Google Gemini"])
-        if "Primary" in prov_select:
-            sel_prov = "primary"
-            sel_model = "gpt-4o-mini"
-        elif "Groq" in prov_select:
+        prov_select = st.radio("Provider", ["Groq LPU Direct (Ultra Fast)", "Google Gemini"])
+        if "Groq" in prov_select:
             sel_prov = "groq"
-            sel_model = st.selectbox("Groq Model", ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"])
+            sel_model = st.selectbox("Groq Model", ["openai/gpt-oss-20b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"])
         else:
             sel_prov = "google"
             sel_model = st.selectbox("Gemini Model", ["gemini-2.5-flash", "gemini-1.5-flash"])

@@ -31,34 +31,27 @@ class CatalogPlugin(BasePlugin):
         @tool
         def get_product(product_name_or_id: str) -> str:
             """
-            Retrieve full product information, price, specs, rating, and stock for a given product name or ID.
-            (e.g., 'MacBook Air M3', 'iPhone 16 Pro', 'Sony WH-1000XM5', 'wireless headphones', 'PROD-101').
-
-            Args:
-                product_name_or_id: The title, brand, category, or ID of the product.
-
-            Returns:
-                JSON string with product details, specs, price, and stock.
+            Retrieve product details, price, specs, rating, and stock for a product name or ID.
+            (e.g., 'MacBook Air M3', 'iPhone 16 Pro', 'Dell UltraSharp 27', 'Sony WH-1000XM5', 'PROD-101').
             """
             product = db.get_product_by_id_or_name(product_name_or_id)
             if not product:
-                # Try fallback query
                 results = db.query_products(category=product_name_or_id)
                 if results:
                     return json.dumps({
                         "status": "multiple_found",
                         "count": len(results),
                         "products": results[:3]
-                    }, indent=2)
+                    })
                 return json.dumps({
                     "status": "not_found",
-                    "message": f"Product '{product_name_or_id}' was not found in catalog."
-                }, indent=2)
+                    "message": f"Product '{product_name_or_id}' was not found."
+                })
 
             return json.dumps({
                 "status": "success",
                 "product": product
-            }, indent=2)
+            })
 
         @tool
         def search_catalog(
@@ -68,16 +61,7 @@ class CatalogPlugin(BasePlugin):
             min_rating: Optional[float] = None,
         ) -> str:
             """
-            Filter products by category, maximum price budget, and minimum customer rating.
-
-            Args:
-                query: Optional search keyword.
-                category: Category filter ('Laptops', 'Smartphones', 'Audio', 'Monitors', 'Smartwatches').
-                max_price: Maximum price threshold in USD.
-                min_rating: Minimum review rating (1.0 - 5.0).
-
-            Returns:
-                JSON list of matching products.
+            Filter catalog products by category, maximum price budget, and minimum customer rating.
             """
             results = db.query_products(
                 category=category,
@@ -89,22 +73,16 @@ class CatalogPlugin(BasePlugin):
                 "status": "success",
                 "count": len(results),
                 "products": results
-            }, indent=2)
+            })
 
         @tool
         def check_warehouse_stock(product_name_or_id: str) -> str:
             """
-            Check real-time warehouse inventory quantity, fulfillment center location, and transit days.
-
-            Args:
-                product_name_or_id: Product ID or title to check.
-
-            Returns:
-                JSON string with stock status and warehouse origin.
+            Check real-time warehouse inventory quantity, location, and shipping days for a product.
             """
             status = db.get_inventory_status(product_name_or_id)
             if not status:
                 return json.dumps({"status": "not_found", "message": f"Product '{product_name_or_id}' not found."})
-            return json.dumps({"status": "success", "inventory": status}, indent=2)
+            return json.dumps({"status": "success", "inventory": status})
 
         return [get_product, search_catalog, check_warehouse_stock]

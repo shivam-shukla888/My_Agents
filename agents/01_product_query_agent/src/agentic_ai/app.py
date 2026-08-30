@@ -1,7 +1,7 @@
 """
 🌐 My Agents: Premium Autonomous AI SaaS Workspace
-Clean, high-performance production UI with Progressive Execution, ChromaDB Grounding,
-Persistent Memory, and Integrated Tool Workspaces.
+Production-Grade AI Workspace with Real Token Streaming, Progressive Execution,
+ChromaDB Grounding, Persistent Memory, and Integrated Tool Workspaces.
 """
 
 import os
@@ -62,7 +62,6 @@ st.markdown("""
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <style>
-    /* CSS Variables Design Tokens */
     :root {
         --bg-primary: #0B0F14;
         --bg-secondary: #111720;
@@ -80,14 +79,12 @@ st.markdown("""
         --error: #EF4444;
     }
 
-    /* Global Streamlit App Overrides */
     .stApp {
         background-color: var(--bg-primary);
         color: var(--text-primary);
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Top Bar Header */
     .top-bar {
         display: flex;
         justify-content: space-between;
@@ -136,27 +133,6 @@ st.markdown("""
         box-shadow: 0 0 8px #22C55E;
     }
 
-    /* Message Bubbles */
-    .user-msg-container {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-        padding: 14px 18px;
-        margin-bottom: 14px;
-        color: var(--text-primary);
-        font-size: 0.95rem;
-        line-height: 1.5;
-    }
-    .assistant-msg-container {
-        background: transparent;
-        border: 1px solid transparent;
-        padding: 4px 6px 16px 6px;
-        margin-bottom: 16px;
-        color: var(--text-primary);
-        line-height: 1.6;
-    }
-
-    /* Tool Call Chips */
     .tool-chip {
         display: inline-flex;
         align-items: center;
@@ -172,38 +148,6 @@ st.markdown("""
         margin-bottom: 6px;
     }
 
-    /* Empty State Suggestion Cards */
-    .suggestion-box {
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-        padding: 16px;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        cursor: pointer;
-        height: 100%;
-    }
-    .suggestion-box:hover {
-        border-color: var(--accent-primary);
-        background: var(--bg-elevated);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-    .suggestion-title {
-        font-size: 0.9rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-bottom: 4px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .suggestion-desc {
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        line-height: 1.4;
-    }
-
-    /* Memory Card */
     .memory-item {
         background: var(--bg-elevated);
         border: 1px solid var(--border-subtle);
@@ -212,7 +156,6 @@ st.markdown("""
         margin-bottom: 10px;
     }
 
-    /* Sidebar Clean Styling */
     section[data-testid="stSidebar"] {
         background-color: var(--bg-secondary) !important;
         border-right: 1px solid var(--border-subtle) !important;
@@ -313,13 +256,10 @@ with st.sidebar:
         thread_id = st.text_input("Thread ID", value="session_main", help="LangGraph checkpointer tracks conversation context")
 
     with st.expander("⚙️ Model & Engine Setup", expanded=False):
-        provider_radio = st.radio("Provider", ["Primary (Ultra Fast)", "Groq LPU Direct", "Google Gemini"])
-        if "Primary" in provider_radio:
-            active_prov = "primary"
-            active_model = "gpt-4o-mini"
-        elif "Groq" in provider_radio:
+        provider_radio = st.radio("Provider", ["Groq LPU (Ultra Fast)", "Google Gemini"])
+        if "Groq" in provider_radio:
             active_prov = "groq"
-            active_model = st.selectbox("Groq Model", ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"])
+            active_model = st.selectbox("Groq Model", ["openai/gpt-oss-20b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"])
         else:
             active_prov = "google"
             active_model = st.selectbox("Gemini Model", ["gemini-2.5-flash", "gemini-1.5-flash"])
@@ -358,7 +298,7 @@ agent_instance = get_cached_agent(
 telemetry_html = ""
 if st.session_state.last_telemetry:
     t = st.session_state.last_telemetry
-    telemetry_html = f"""<span class="telemetry-badge">⏱️ {t.get('total_seconds', 0)}s | {t.get('tool_count', 0)} tools | mem: {t.get('memory_retrieval_ms', 0)}ms</span>"""
+    telemetry_html = f"""<span class="telemetry-badge">⏱️ {t.get('total_seconds', 0)}s | TTFT: {t.get('ttft_seconds', 0)}s | {t.get('tool_count', 0)} tools</span>"""
 
 st.markdown(f"""
 <div class="top-bar">
@@ -414,24 +354,22 @@ if st.session_state.active_view == "💬 Chat Workspace":
                 st.markdown(msg["content"])
         else:
             with st.chat_message("assistant", avatar="⚡"):
-                # Render tool summary chips
                 if msg.get("tool_calls"):
                     chips_html = '<div style="margin-bottom: 8px;">'
                     for tc in msg["tool_calls"]:
-                        name = tc.get("name", "Tool")
-                        clean_name = name.replace("_", " ").title()
-                        chips_html += f'<span class="tool-chip">✓ {clean_name}</span>'
+                        name = tc.get("name", "Tool").replace("_", " ").title()
+                        dur = tc.get("duration_ms", 0)
+                        chips_html += f'<span class="tool-chip">✓ {name} ({dur}ms)</span>'
                     chips_html += '</div>'
                     st.markdown(chips_html, unsafe_allow_html=True)
                 
                 st.markdown(msg["content"])
                 
-                # Expandable technical inspect
                 if msg.get("tool_calls"):
                     with st.expander(f"⚙️ Execution Trace ({len(msg['tool_calls'])} tools)", expanded=False):
                         for tc in msg["tool_calls"]:
                             st.markdown(f"**Tool:** `{tc.get('name')}`")
-                            st.json(tc.get("args"))
+                            st.json(tc)
 
     # Chat Input Box
     user_typed = st.chat_input("Ask a grounded product question, recall saved preferences, or generate invoices...")
@@ -448,52 +386,49 @@ if st.session_state.active_view == "💬 Chat Workspace":
             st.markdown(prompt_to_execute)
 
         with st.chat_message("assistant", avatar="⚡"):
-            # Staged Progressive Execution Status
-            with st.status("⚡ Agent is processing...", expanded=True) as status_box:
-                st.write("🔍 **Recalling user context** from ChromaDB persistent memory...")
-                t_start = time.perf_counter()
-                
-                # Execute agent query
-                res = agent_instance.invoke_with_trace(
-                    question=prompt_to_execute,
-                    user_id=user_id,
-                    thread_id=thread_id,
-                )
-                
-                st.write("🛡️ **Verifying specifications & executing tools**...")
-                time.sleep(0.1)  # smooth visual transition
-                status_box.update(label="✅ Response Generated", state="complete", expanded=False)
+            stage_placeholder = st.empty()
+            tools_placeholder = st.empty()
+            text_placeholder = st.empty()
 
-            answer = res.get("output", "No response generated.")
-            tool_calls = res.get("tool_calls", [])
-            telemetry = res.get("telemetry", {})
+            streamed_text = ""
+            active_tools = []
+            final_telemetry = {}
 
-            # Store telemetry
-            st.session_state.last_telemetry = telemetry
-
-            # Render tool summary chips
-            if tool_calls:
-                chips_html = '<div style="margin-bottom: 8px;">'
-                for tc in tool_calls:
-                    name = tc.get("name", "Tool")
-                    clean_name = name.replace("_", " ").title()
-                    chips_html += f'<span class="tool-chip">✓ {clean_name}</span>'
-                chips_html += '</div>'
-                st.markdown(chips_html, unsafe_allow_html=True)
-
-            st.markdown(answer)
-
-            if tool_calls:
-                with st.expander(f"⚙️ Execution Trace ({len(tool_calls)} tools)", expanded=False):
-                    for tc in tool_calls:
-                        st.markdown(f"**Tool:** `{tc.get('name')}`")
-                        st.json(tc.get("args"))
+            # Execute real token-by-token streaming
+            for event in agent_instance.stream_with_trace(
+                question=prompt_to_execute,
+                user_id=user_id,
+                thread_id=thread_id,
+            ):
+                if event["type"] == "stage":
+                    stage_placeholder.caption(f"⚡ *{event['detail']}*")
+                elif event["type"] == "tool_start":
+                    t_name = event["name"].replace("_", " ").title()
+                    stage_placeholder.caption(f"🔧 *Calling {t_name}...*")
+                elif event["type"] == "tool_end":
+                    t_name = event["name"].replace("_", " ").title()
+                    t_dur = event.get("duration_ms", 0)
+                    active_tools.append({"name": event["name"], "duration_ms": t_dur})
+                    chips_html = '<div style="margin-bottom: 8px;">'
+                    for tc in active_tools:
+                        c_name = tc["name"].replace("_", " ").title()
+                        chips_html += f'<span class="tool-chip">✓ {c_name} ({tc["duration_ms"]}ms)</span>'
+                    chips_html += '</div>'
+                    tools_placeholder.markdown(chips_html, unsafe_allow_html=True)
+                elif event["type"] == "token":
+                    streamed_text += event["content"]
+                    text_placeholder.markdown(streamed_text)
+                elif event["type"] == "complete":
+                    stage_placeholder.empty()
+                    final_ans = event["output"] or streamed_text
+                    final_telemetry = event["telemetry"]
+                    st.session_state.last_telemetry = final_telemetry
 
             st.session_state.messages_display.append({
                 "role": "assistant",
-                "content": answer,
-                "tool_calls": tool_calls,
-                "telemetry": telemetry,
+                "content": final_ans,
+                "tool_calls": active_tools,
+                "telemetry": final_telemetry,
             })
             st.rerun()
 
@@ -546,7 +481,17 @@ elif st.session_state.active_view == "🛡️ Grounding Lab":
             with st.container(border=True):
                 dist = r.get("relevance_distance", 0.0)
                 meta = r.get("metadata", {})
-                st.markdown(f"##### 📄 {meta.get('name', meta.get('title', 'Verified Source'))} • `Distance: {dist}`")
+                
+                # Verified Relevance Confidence categorization
+                if dist <= 0.8:
+                    rel_badge = f'<span style="color: #22C55E; font-weight:700;">🟢 VERIFIED (High Relevance, Distance: {dist})</span>'
+                elif dist <= 1.2:
+                    rel_badge = f'<span style="color: #F59E0B; font-weight:700;">🟡 MODERATE MATCH (Distance: {dist})</span>'
+                else:
+                    rel_badge = f'<span style="color: #EF4444; font-weight:700;">🔴 LOW RELEVANCE (Distance: {dist})</span>'
+
+                st.markdown(f"##### 📄 {meta.get('name', meta.get('title', 'Verified Source'))}")
+                st.markdown(rel_badge, unsafe_allow_html=True)
                 st.markdown(f"**Type:** `{meta.get('type')}`")
                 st.code(r["content"], language="text")
 

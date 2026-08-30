@@ -1,14 +1,14 @@
 """
-High-Level Modular Agent Orchestrator with Persistent Memory & ChromaDB Grounding.
-Integrates Connectors, Plugin Registry, Checkpointing, and Anti-Hallucination Tools.
+High-Level Modular Agent Orchestrator with Persistent Memory, ChromaDB Grounding,
+Real Token-by-Token Streaming, and Stage-Based Telemetry.
 """
 
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage, ToolMessage
 
 from agentic_ai.core.config import get_llm
 from agentic_ai.plugins.registry import PluginRegistry
@@ -19,18 +19,18 @@ from agentic_ai.plugins.invoice_plugin import InvoicePlugin
 from agentic_ai.plugins.memory_plugin import MemoryPlugin
 from agentic_ai.connectors.chroma_connector import ChromaMemoryConnector
 
-SYSTEM_PROMPT = """You are an intelligent, high-level E-Commerce & Product AI Assistant equipped with persistent long-term memory and ground-truth data connectors:
-1. **Catalog & Inventory Plugin**: Look up product details, hardware specs, stock availability, and prices.
-2. **RAG Knowledge & Support Plugin**: Query official user manuals, setup guides, and troubleshooting steps.
-3. **Finance & Currency Plugin**: Perform multi-currency conversions (EUR, GBP, INR, JPY), sales tax, and discount lookups.
-4. **Invoice & PDF Plugin**: Generate official downloadable order invoice PDFs for purchases.
-5. **Memory & Grounding Plugin**: Save and recall persistent long-term user preferences and verify facts with ChromaDB.
+# High-density compact system prompt (avoids TPM token exhaustion)
+SYSTEM_PROMPT = """You are an expert E-Commerce AI Assistant with tools:
+- Catalog: `get_product`, `search_catalog`, `get_stock`
+- Knowledge: `query_user_manuals`, `verify_and_ground_fact`
+- Finance: `convert_currency`, `calculate_total_with_tax`, `lookup_discount`
+- Invoices: `generate_order_invoice`
+- Memory: `save_user_memory`, `recall_user_memories`
 
-### STRICT ANTI-HALLUCINATION & FACTUAL GROUNDING RULES:
-- **Never Guess Technical Specs or Prices**: Always verify through `get_product`, `verify_and_ground_fact`, or `query_user_manuals`.
-- **Long-Term Memory Utilization**: When talking with a user, recall and respect their previously saved preferences, owned gear, and budget limits.
-- **Proactive Savings**: Check for active discount coupons when discussing prices.
-- **Structured Presentation**: Use markdown comparison tables, bullet points, and bold values for readability.
+Rules:
+1. Always verify technical specifications, stock, and prices using tools before answering.
+2. Recall and respect user preferences and budget.
+3. Present answers clearly with markdown bullet points and bold key values.
 """
 
 
@@ -38,13 +38,13 @@ class HighLevelAgent:
     """
     High-Level Agent orchestrator supporting dynamic plugin management,
     persistent conversation threads (Checkpointer), ChromaDB long-term memory,
-    and simple `ask(question, user_id, thread_id)` execution.
+    real token-by-token streaming, and stage-based latency telemetry.
     """
 
     def __init__(
         self,
         llm: Optional[BaseChatModel] = None,
-        provider: str = "primary",
+        provider: str = "groq",
         model_name: Optional[str] = None,
         temperature: float = 0.0,
         registry: Optional[PluginRegistry] = None,
@@ -124,15 +124,15 @@ class HighLevelAgent:
         )
         return result["output"]
 
-    def invoke_with_trace(
+    def stream_with_trace(
         self,
         question: str,
         user_id: str = "default_user",
         thread_id: str = "main_session",
         chat_history: Optional[List[BaseMessage]] = None,
-    ) -> Dict[str, Any]:
+    ) -> Generator[Dict[str, Any], None, None]:
         """
-        Execute query with thread persistence, message trace, tool call logging, and latency telemetry.
+        Real Token-by-Token Streaming with stage execution events and live TTFT telemetry.
         """
         t0 = time.perf_counter()
         config = {
@@ -141,7 +141,8 @@ class HighLevelAgent:
             }
         }
 
-        # Check for long-term memories for this user to inject as background context
+        # Stage 1: Memory Recall
+        yield {"type": "stage", "stage": "MEMORY", "detail": "Recalling user memory from ChromaDB..."}
         t_mem_start = time.perf_counter()
         memories = self.chroma_conn.recall_user_memories(user_id=user_id, n_results=3)
         t_mem_elapsed = round((time.perf_counter() - t_mem_start) * 1000, 1)
@@ -149,7 +150,117 @@ class HighLevelAgent:
         context_prefix = ""
         if memories:
             mem_bullets = "\n".join(f"- {m['memory']}" for m in memories)
-            context_prefix = f"[System Context: User ID is '{user_id}'. Known Long-Term Preferences:\n{mem_bullets}]\n\n"
+            context_prefix = f"[User '{user_id}' Preferences:\n{mem_bullets}]\n\n"
+
+        prompt_input = f"{context_prefix}{question}"
+
+        messages = []
+        if chat_history:
+            messages.extend(chat_history)
+        messages.append(HumanMessage(content=prompt_input))
+
+        # Stage 2: Graph Execution & Streaming
+        yield {"type": "stage", "stage": "ANALYZING", "detail": "Reasoning & planning tool execution..."}
+
+        accumulated_text = ""
+        tool_calls: List[Dict[str, Any]] = []
+        first_token_time: Optional[float] = None
+        tool_start_times: Dict[str, float] = {}
+
+        try:
+            for chunk, metadata in self._agent_graph.stream(
+                {"messages": messages},
+                config=config,
+                stream_mode="messages",
+            ):
+                # Detect Tool Invocations
+                if getattr(chunk, "tool_calls", None):
+                    for tc in chunk.tool_calls:
+                        t_name = tc.get("name", "tool")
+                        tool_start_times[t_name] = time.perf_counter()
+                        yield {
+                            "type": "tool_start",
+                            "name": t_name,
+                            "args": tc.get("args", {}),
+                            "id": tc.get("id"),
+                        }
+
+                # Detect Tool Message Responses
+                if isinstance(chunk, ToolMessage):
+                    t_name = getattr(chunk, "name", "tool")
+                    t_dur = round((time.perf_counter() - tool_start_times.get(t_name, time.perf_counter())) * 1000, 1)
+                    tc_record = {
+                        "name": t_name,
+                        "duration_ms": t_dur,
+                        "preview": str(chunk.content)[:120],
+                    }
+                    tool_calls.append(tc_record)
+                    yield {
+                        "type": "tool_end",
+                        "name": t_name,
+                        "duration_ms": t_dur,
+                    }
+
+                # Detect Content Streaming Tokens (AIMessageChunk)
+                if isinstance(chunk, AIMessageChunk) and chunk.content and not getattr(chunk, "tool_call_chunks", None):
+                    if first_token_time is None:
+                        first_token_time = time.perf_counter()
+                        yield {"type": "stage", "stage": "GENERATING", "detail": "Streaming response tokens..."}
+
+                    content_str = str(chunk.content)
+                    accumulated_text += content_str
+                    yield {"type": "token", "content": content_str}
+
+        except Exception as e:
+            res = self.invoke_with_trace(question=question, user_id=user_id, thread_id=thread_id, chat_history=chat_history)
+            accumulated_text = res["output"]
+            tool_calls = res["tool_calls"]
+
+        total_latency = round(time.perf_counter() - t0, 3)
+        ttft_val = round(first_token_time - t0, 3) if first_token_time else total_latency
+
+        telemetry = {
+            "total_seconds": total_latency,
+            "ttft_seconds": ttft_val,
+            "memory_retrieval_ms": t_mem_elapsed,
+            "tool_count": len(tool_calls),
+            "tool_calls": tool_calls,
+        }
+
+        yield {
+            "type": "complete",
+            "output": accumulated_text,
+            "tool_calls": tool_calls,
+            "telemetry": telemetry,
+            "user_id": user_id,
+            "thread_id": thread_id,
+        }
+
+    def invoke_with_trace(
+        self,
+        question: str,
+        user_id: str = "default_user",
+        thread_id: str = "main_session",
+        chat_history: Optional[List[BaseMessage]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Synchronous execution with telemetry timing.
+        """
+        t0 = time.perf_counter()
+        config = {
+            "configurable": {
+                "thread_id": thread_id,
+            }
+        }
+
+        t_mem_start = time.perf_counter()
+        memories = self.chroma_conn.recall_user_memories(user_id=user_id, n_results=3)
+        t_mem_elapsed = round((time.perf_counter() - t_mem_start) * 1000, 1)
+
+        context_prefix = ""
+        if memories:
+            mem_bullets = "\n".join(f"- {m['memory']}" for m in memories)
+            context_prefix = f"[User '{user_id}' Preferences:\n{mem_bullets}]\n\n"
 
         prompt_input = f"{context_prefix}{question}"
 
@@ -166,7 +277,6 @@ class HighLevelAgent:
         t_graph_elapsed = round((time.perf_counter() - t_graph_start) * 1000, 1)
         all_msgs = response_state.get("messages", [])
 
-        # Extract final answer
         final_answer = ""
         for m in reversed(all_msgs):
             if isinstance(m, AIMessage) and m.content:
@@ -176,7 +286,6 @@ class HighLevelAgent:
                 final_answer = m.content
                 break
 
-        # Extract tool calls
         tool_calls = []
         for m in all_msgs:
             if getattr(m, "tool_calls", None):

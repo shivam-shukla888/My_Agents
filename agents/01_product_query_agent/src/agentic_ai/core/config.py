@@ -1,7 +1,6 @@
 """
-Configuration and Multi-Provider LLM Factory with Ultra-Low Latency Fallbacks.
-Primary: Configured Primary LLM (OpenAI / Custom Endpoint)
-Fallback: Blazing-fast Groq LPU models (qwen/qwen3.8-27b, openai/gpt-oss-20b)
+Configuration and Multi-Provider LLM Factory with Ultra-Low Latency & High-TPM Fallbacks.
+Primary: Ultra-Fast Groq LPUs (openai/gpt-oss-20b, qwen/qwen3.8-27b, openai/gpt-oss-120b).
 """
 
 import os
@@ -16,6 +15,7 @@ src_dir = current_file.parent.parent
 load_dotenv(current_file.parent / ".env")
 load_dotenv(src_dir / ".env")
 load_dotenv(src_dir.parent / ".env")
+load_dotenv(src_dir.parent.parent / ".env")
 
 
 def get_llm(
@@ -25,96 +25,84 @@ def get_llm(
     api_key: Optional[str] = None,
 ) -> BaseChatModel:
     """
-    Factory function initializing LLMs with primary key priority and ultra-fast Groq fallbacks.
+    Factory function initializing LLMs with ultra-fast sub-second response latency
+    and resilient high-TPM fallback chaining.
 
     Args:
-        provider: 'primary', 'groq', or 'google' / 'gemini'.
-        model_name: Specific model ID.
+        provider: 'groq', 'primary', or 'google' / 'gemini'.
+        model_name: Specific model ID (defaults to 'openai/gpt-oss-20b').
         temperature: Sampling temperature (0.0 for deterministic tool execution).
         api_key: Optional API key override.
 
     Returns:
         BaseChatModel instance with active fallbacks configured.
     """
-    prov = (provider or "primary").lower().strip()
-    primary_key = api_key or os.getenv("PRIMARY_API_KEY") or os.getenv("OPENAI_API_KEY")
+    prov = (provider or "groq").lower().strip()
+    primary_key = api_key or os.getenv("PRIMARY_API_KEY")
     groq_key = os.getenv("GROQ_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY")
 
-    # Build Fallback Chain of Fast Groq Models
+    # High-TPM Fast Groq Models Chain (~400ms - 700ms)
     fallbacks: List[BaseChatModel] = []
-
     if groq_key:
         try:
             from langchain_groq import ChatGroq
 
-            # Fast Fallback 1: Qwen 27B on Groq LPUs (~300-600ms latency)
-            groq_fast_1 = ChatGroq(
+            selected_model = model_name or "openai/gpt-oss-20b"
+            groq_primary = ChatGroq(
+                model=selected_model,
+                temperature=temperature,
+                api_key=groq_key,
+                max_retries=1,
+                request_timeout=8.0,
+            )
+            # Fallback 1: Qwen 27B
+            groq_fallback_1 = ChatGroq(
                 model="qwen/qwen3.8-27b",
                 temperature=temperature,
                 api_key=groq_key,
                 max_retries=1,
                 request_timeout=8.0,
             )
-            # Fast Fallback 2: GPT-OSS 20B on Groq
-            groq_fast_2 = ChatGroq(
-                model="openai/gpt-oss-20b",
+            # Fallback 2: GPT-OSS 120B
+            groq_fallback_2 = ChatGroq(
+                model="openai/gpt-oss-120b",
                 temperature=temperature,
                 api_key=groq_key,
                 max_retries=1,
                 request_timeout=8.0,
             )
-            fallbacks.extend([groq_fast_1, groq_fast_2])
+            if selected_model == "openai/gpt-oss-20b":
+                fallbacks.extend([groq_fallback_1, groq_fallback_2])
+            else:
+                fallbacks.extend([groq_primary, groq_fallback_1])
         except Exception:
-            pass
+            groq_primary = None
+    else:
+        groq_primary = None
 
-    # Google Provider Explicit Request
-    if prov in ("google", "gemini") and google_key and not google_key.startswith("sk-"):
+    # Google Gemini Direct (if valid non-sk key)
+    if prov in ("google", "gemini") and google_key and not google_key.startswith("sk-c0"):
         from langchain_google_genai import ChatGoogleGenerativeAI
-        primary = ChatGoogleGenerativeAI(
+        gemini_model = ChatGoogleGenerativeAI(
             model=model_name or "gemini-2.5-flash",
             temperature=temperature,
             google_api_key=google_key,
         )
         if fallbacks:
-            return primary.with_fallbacks(fallbacks)
-        return primary
+            return gemini_model.with_fallbacks(fallbacks)
+        return gemini_model
 
-    # Primary Key Strategy (ChatOpenAI / Custom Base URL)
-    if primary_key and prov != "groq":
-        try:
-            from langchain_openai import ChatOpenAI
+    # Direct Groq LPUs (Ultra-fast primary engine)
+    if groq_primary:
+        if fallbacks:
+            return groq_primary.with_fallbacks(fallbacks)
+        return groq_primary
 
-            base_url = os.getenv("PRIMARY_BASE_URL", "https://api.openai.com/v1")
-            primary_model = model_name or os.getenv("PRIMARY_MODEL", "gpt-4o-mini")
-
-            primary_llm = ChatOpenAI(
-                model=primary_model,
-                temperature=temperature,
-                api_key=primary_key,
-                base_url=base_url,
-                max_retries=1,
-                request_timeout=5.0,  # Fast 5s timeout to prevent hanging
-            )
-
-            if fallbacks:
-                return primary_llm.with_fallbacks(fallbacks)
-            return primary_llm
-        except Exception:
-            pass
-
-    # Direct Groq Provider
-    if fallbacks:
-        primary_groq = fallbacks[0]
-        remaining = fallbacks[1:]
-        if remaining:
-            return primary_groq.with_fallbacks(remaining)
-        return primary_groq
-
-    # Ultimate default fallback
+    # Ultimate fallback
     from langchain_groq import ChatGroq
     return ChatGroq(
-        model=model_name or "qwen/qwen3.8-27b",
+        model=model_name or "openai/gpt-oss-20b",
         temperature=temperature,
-        api_key=groq_key,
+        api_key=groq_key or "mock_key",
     )
