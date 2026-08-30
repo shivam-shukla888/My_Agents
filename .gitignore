@@ -1,0 +1,29 @@
+# Environments & Secrets (NEVER COMMIT API KEYS)
+.env
+.env.*
+*.env
+
+# Python-generated files & caches
+__pycache__/
+*.py[oc]
+*.pyo
+*.pyd
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Data & Output Artifacts
+data/
+invoices/
+*.pdf
+*.log
+.DS_Store
