@@ -1,14 +1,16 @@
 """
-🌐 Multi-Agent Collaborative Network & Evals Studio
-World-Class AI Dashboard with Real 3D Visual Assets, Glassmorphism & Inter-Agent Intelligence.
+🌐 My Agents: Enterprise Multi-Agent AI Studio
+World-Class SaaS UI with Progressive Execution, Real 3D Assets, Inter-Agent Mesh,
+ChromaDB Persistent Memory & 3-Pillar Evals Benchmark.
 """
 
 import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-# Add paths
+# Add source directories to Python path
 root_dir = Path(__file__).resolve().parent
 for p in [
     str(root_dir),
@@ -29,270 +31,265 @@ from shared.orchestrator import MultiAgentNetwork
 from shared.security import SecureWorkspaceVault
 from evals.runner import EvaluationRunner
 from evals.benchmark_dataset import BENCHMARK_TEST_SUITE
+from agentic_ai.connectors import DatabaseConnector, ChromaMemoryConnector
 
 load_dotenv(root_dir / ".env")
 load_dotenv(root_dir / "src" / "agentic_ai" / ".env")
 
-# Page Configuration
+# -------------------------------------------------------------
+# PAGE CONFIGURATION & DESIGN SYSTEM
+# -------------------------------------------------------------
 st.set_page_config(
-    page_title="My Agents: Autonomous Multi-Agent Studio",
-    page_icon="🤖",
+    page_title="My Agents: Autonomous AI Studio",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Custom High-End CSS with Google Fonts & Glassmorphism
 st.markdown("""
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <style>
-    /* Global Typography */
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-    }
-    
-    h1, h2, h3, h4, .hero-title {
-        font-family: 'Outfit', sans-serif !important;
-        letter-spacing: -0.02em;
-    }
-    
-    code, pre {
-        font-family: 'JetBrains Mono', monospace !important;
+    /* CSS Variables Design Tokens */
+    :root {
+        --bg-primary: #0B0F14;
+        --bg-secondary: #111720;
+        --bg-elevated: #151C26;
+        --border-subtle: #222C38;
+        --border-hover: #334155;
+        --text-primary: #F5F7FA;
+        --text-secondary: #94A3B8;
+        --text-muted: #64748B;
+        --accent-primary: #7C5CFF;
+        --accent-hover: #8B70FF;
+        --accent-glow: rgba(124, 92, 255, 0.15);
+        --success: #22C55E;
+        --warning: #F59E0B;
+        --error: #EF4444;
     }
 
-    /* Glassmorphism Containers */
-    .glass-card {
-        background: rgba(21, 29, 46, 0.7);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 24px;
+    .stApp {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Top Bar Header */
+    .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 20px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
         margin-bottom: 20px;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        transition: transform 0.2s ease, border-color 0.2s ease;
     }
-    .glass-card:hover {
-        border-color: rgba(99, 102, 241, 0.4);
-        transform: translateY(-2px);
-    }
-
-    /* Agent Cards */
-    .agent-box {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 16px;
-        text-align: center;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .agent-box:hover {
-        border-color: #6366F1;
-        box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.25);
-    }
-    
-    /* Glowing Hero Badge */
-    .hero-badge {
-        display: inline-flex;
+    .top-bar-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
         align-items: center;
         gap: 8px;
-        padding: 6px 14px;
-        background: rgba(99, 102, 241, 0.12);
-        border: 1px solid rgba(99, 102, 241, 0.3);
-        border-radius: 9999px;
-        color: #818CF8;
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin-bottom: 12px;
     }
-    .live-pulse {
-        width: 8px;
-        height: 8px;
-        background: #10B981;
+    .top-bar-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        background: rgba(34, 197, 94, 0.12);
+        color: #4ADE80;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .telemetry-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        background: rgba(124, 92, 255, 0.12);
+        color: #A78BFA;
+        border: 1px solid rgba(124, 92, 255, 0.3);
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .pulse-dot {
+        width: 6px;
+        height: 6px;
+        background: #22C55E;
         border-radius: 50%;
-        box-shadow: 0 0 10px #10B981;
+        box-shadow: 0 0 8px #22C55E;
     }
 
-    /* Gradient Text */
-    .gradient-text {
-        background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 50%, #818CF8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-size: 2.6rem;
-        font-weight: 800;
-        line-height: 1.15;
+    /* Tool Call Chips */
+    .tool-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        background: rgba(124, 92, 255, 0.08);
+        border: 1px solid rgba(124, 92, 255, 0.25);
+        border-radius: 8px;
+        color: #C4B5FD;
+        margin-right: 6px;
+        margin-bottom: 6px;
     }
-    
-    /* Metric Pill */
-    .metric-pill {
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        padding: 12px;
-        text-align: center;
-    }
-    .metric-val {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #F8FAFC;
-        font-family: 'Outfit', sans-serif;
-    }
-    .metric-label {
-        font-size: 0.75rem;
-        color: #94A3B8;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-top: 2px;
+
+    /* Sidebar Clean Styling */
+    section[data-testid="stSidebar"] {
+        background-color: var(--bg-secondary) !important;
+        border-right: 1px solid var(--border-subtle) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 vault = SecureWorkspaceVault()
 
-# Initialize Cached Multi-Agent Network
+# -------------------------------------------------------------
+# GLOBAL CACHED NETWORK INSTANCE
+# -------------------------------------------------------------
 @st.cache_resource
-def load_orchestrator(provider: str, model: str):
-    return MultiAgentNetwork(provider=provider, model_name=model)
+def get_cached_multi_agent_network(prov_name: str, model_name: str):
+    return MultiAgentNetwork(provider=prov_name, model_name=model_name)
+
+# Session State
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
+if "last_metrics" not in st.session_state:
+    st.session_state.last_metrics = None
+if "pending_goal" not in st.session_state:
+    st.session_state.pending_goal = None
 
 # -------------------------------------------------------------
 # SIDEBAR CONTROL CENTER
 # -------------------------------------------------------------
 with st.sidebar:
-    st.image("assets/agent_evals.jpg", caption="AI Agent Orchestrator", width=120)
-    st.markdown("### 🎛️ Agent Command Hub")
-    
-    selected_mode = st.radio(
-        "Operating Workspace",
+    st.image("assets/agent_evals.jpg", caption="My Agents Studio", width=120)
+    st.markdown("### ⚡ **My Agents Studio**")
+    st.caption("Autonomous Multi-Agent Workspace")
+
+    if st.button("➕ New Session", width="stretch", type="primary"):
+        st.session_state.chat_messages = []
+        st.session_state.last_metrics = None
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("##### 🧭 Workspaces & Agents")
+    active_workspace = st.radio(
+        "Workspace Selection",
         [
             "🌐 Multi-Agent Collaborative Mesh",
             "🛍️ Agent 01: Shopping & Catalog",
             "🔍 Agent 02: Deep Web Intelligence",
-            "📊 Agent 03: SQL & Financial Analytics",
-            "🧪 3-Pillar Evaluation Benchmark",
+            "📊 Agent 03: SQL Data Analytics",
+            "🧪 3-Pillar Evals Benchmark",
+            "📁 Shared Vault Explorer",
         ],
-        index=0,
+        label_visibility="collapsed",
     )
 
     st.markdown("---")
-    st.markdown("### ⚡ Engine & Model Setup")
-    
-    provider_opt = st.selectbox("LLM Provider", ["Primary / Low Latency (Ultra Fast)", "Groq LPU Direct", "Google Gemini"])
-    if "Primary" in provider_opt:
-        prov = "primary"
-        model_id = "gpt-4o-mini"
-    elif "Groq" in provider_opt:
-        prov = "groq"
-        model_id = st.selectbox("Groq Model", ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"])
-    else:
-        prov = "google"
-        model_id = "gemini-2.5-flash"
+    with st.expander("⚙️ LLM Engine & Routing", expanded=False):
+        prov_select = st.radio("Provider", ["Primary (Ultra Fast)", "Groq LPU Direct", "Google Gemini"])
+        if "Primary" in prov_select:
+            sel_prov = "primary"
+            sel_model = "gpt-4o-mini"
+        elif "Groq" in prov_select:
+            sel_prov = "groq"
+            sel_model = st.selectbox("Groq Model", ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"])
+        else:
+            sel_prov = "google"
+            sel_model = st.selectbox("Gemini Model", ["gemini-2.5-flash", "gemini-1.5-flash"])
 
     st.markdown("---")
-    st.markdown("### 📁 Shared Workspace Vault")
-    vault_files = vault.list_shared_files()
-    if vault_files:
-        for vf in vault_files:
-            st.markdown(f"📄 `{vf['filename']}` ({vf['size_bytes']} B)")
-    else:
-        st.info("Vault is ready for new reports.")
+    if st.button("🗑️ Clear Session Context", width="stretch"):
+        st.session_state.chat_messages = []
+        st.session_state.last_metrics = None
+        st.success("Session reset.")
+        st.rerun()
 
-network = load_orchestrator(prov, model_id)
+# Load Cached Orchestrator
+network = get_cached_multi_agent_network(sel_prov, sel_model)
 
-# -------------------------------------------------------------
-# HERO HEADER SECTION WITH 3D ASSETS
-# -------------------------------------------------------------
-st.markdown("""
-<div class="hero-badge">
-    <span class="live-pulse"></span> Production Multi-Agent Ecosystem v2.0
+# Top Bar Header
+metrics_html = ""
+if st.session_state.last_metrics:
+    m = st.session_state.last_metrics
+    metrics_html = f"""<span class="telemetry-badge">⏱️ {m.get('latency', '0.0')}s | {m.get('tools', 0)} tools | Engine: {sel_prov.title()}</span>"""
+
+st.markdown(f"""
+<div class="top-bar">
+    <div class="top-bar-title">
+        <span>🤖</span> {active_workspace}
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+        <span class="top-bar-badge"><span class="pulse-dot"></span> System Online</span>
+        {metrics_html}
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-col_hero_text, col_hero_banner = st.columns([1.2, 1.8])
 
-with col_hero_text:
-    st.markdown('<div class="gradient-text">Autonomous Multi-Agent AI Studio</div>', unsafe_allow_html=True)
-    st.markdown("""
-    A unified network of domain-specialized AI agents cooperating over an **Inter-Agent Communication Bus**, 
-    grounded with **ChromaDB Long-Term Memory**, and verified by a **3-Pillar Evaluation Suite**.
-    """)
-    
-    # 3-Pillar Highlights
-    st.markdown("""
-    - ⚡ **Sub-Second Execution**: Ultra-low latency primary engine with automatic Groq LPU fallbacks.
-    - 🛡️ **Anti-Hallucination Grounding**: Fact-checked against indexed ChromaDB documentation.
-    - 🤝 **Live Inter-Agent Delegation**: Synchronous task handoffs between shopping, web research, and data analytics.
-    """)
+# =============================================================
+# WORKSPACE 1: MULTI-AGENT COLLABORATIVE MESH
+# =============================================================
+if "Collaborative" in active_workspace:
+    st.markdown("### 🌐 **Autonomous Multi-Agent Team Execution**")
+    st.caption("Agent 01 (Products), Agent 02 (Web Research), and Agent 03 (SQL Analytics) collaborate synchronously over the shared communication bus.")
 
-with col_hero_banner:
-    st.image("assets/hero_banner.jpg", width="stretch")
+    # 3D Agent Summary Cards
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.image("assets/agent_01_product.jpg", width="stretch")
+        st.markdown("##### 🛍️ Agent 01: Product Catalog")
+        st.caption("Catalog specs, inventory stock, ChromaDB memory, and PDF invoices.")
+    with c2:
+        st.image("assets/agent_02_research.jpg", width="stretch")
+        st.markdown("##### 🔍 Agent 02: Web Research")
+        st.caption("Live competitor prices (Amazon, Best Buy, B&H), reviews & briefs.")
+    with c3:
+        st.image("assets/agent_03_analyst.jpg", width="stretch")
+        st.markdown("##### 📊 Agent 03: SQL Analytics")
+        st.caption("Transactional SQL queries, category revenue & stockout forecasts.")
 
-st.markdown("---")
+    st.markdown("---")
+    st.markdown("##### 💡 Strategic Collaborative Objectives")
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        if st.button("💻 **Apple MacBook Air M3 Strategy**\n\nEvaluate catalog stock, competitor pricing & sales.", width="stretch"):
+            st.session_state.pending_goal = "Evaluate Apple MacBook Air M3: catalog inventory, external competitor prices, and sales performance."
+    with s2:
+        if st.button("📱 **Smartphone Market Face-off**\n\nCompare iPhone 16 Pro and Galaxy S25 Ultra deals.", width="stretch"):
+            st.session_state.pending_goal = "Compare iPhone 16 Pro and Galaxy S25 Ultra: store stock, external carrier deals, and category revenue share."
+    with s3:
+        if st.button("🖥️ **Dell 4K Monitor Stockout Health**\n\nAnalyze Dell UltraSharp 27 specs, retail prices & stockout.", width="stretch"):
+            st.session_state.pending_goal = "Analyze Dell UltraSharp 27 4K: specs & power delivery, market retail prices, and days to stockout."
 
-# -------------------------------------------------------------
-# 3D AGENT GRID CARDS
-# -------------------------------------------------------------
-st.markdown("### 🤖 Deployed AI Agents & Systems")
+    user_mission = st.text_input("Or input a custom collaborative mission:", placeholder="e.g. Find best wireless headphones, research competitor deals online, and analyze sales revenue...")
+    goal_to_run = st.session_state.pending_goal or user_mission
+    st.session_state.pending_goal = None
 
-c1, c2, c3, c4 = st.columns(4)
-
-with c1:
-    st.image("assets/agent_01_product.jpg", width="stretch")
-    st.markdown("#### 🛍️ Agent 01: Products")
-    st.caption("ChromaDB Memory, Catalog Specs, PDF Invoices & FX Pricing.")
-
-with c2:
-    st.image("assets/agent_02_research.jpg", width="stretch")
-    st.markdown("#### 🔍 Agent 02: Research")
-    st.caption("Competitor Live Prices (Amazon, Best Buy, B&H), Reviews & Synthesis.")
-
-with c3:
-    st.image("assets/agent_03_analyst.jpg", width="stretch")
-    st.markdown("#### 📊 Agent 03: Data Analyst")
-    st.caption("SQL Transactions, Revenue Charts, Margin Analysis & Stockout Forecasts.")
-
-with c4:
-    st.image("assets/agent_evals.jpg", width="stretch")
-    st.markdown("#### 🧪 Evals Suite")
-    st.caption("3 Pillars: Functional Accuracy, Latency/Cost & Safety/PII Scanners.")
-
-st.markdown("---")
-
-# -------------------------------------------------------------
-# WORKSPACE 1: COLLABORATIVE MULTI-AGENT MESH
-# -------------------------------------------------------------
-if "Collaborative" in selected_mode:
-    st.markdown("## 🌐 Multi-Agent Collaborative Mesh")
-    st.markdown("Watch all 3 agents communicate, share context, and generate an executive intelligence report.")
-
-    st.markdown("#### 💡 Quick Strategic Scenarios")
-    p1, p2, p3 = st.columns(3)
-    with p1:
-        if st.button("💻 Apple MacBook Air M3 Analysis", width="stretch"):
-            st.session_state.collab_input = "Evaluate Apple MacBook Air M3: catalog inventory, external competitor prices, and sales performance."
-    with p2:
-        if st.button("📱 Flagship Smartphone Face-off", width="stretch"):
-            st.session_state.collab_input = "Compare iPhone 16 Pro and Galaxy S25 Ultra: store stock, external carrier deals, and category revenue share."
-    with p3:
-        if st.button("🖥️ Dell UltraSharp 27 4K Monitor", width="stretch"):
-            st.session_state.collab_input = "Analyze Dell UltraSharp 27 4K: specs & power delivery, market retail prices, and days to stockout."
-
-    user_goal = st.text_input("Or define a custom multi-agent business goal:", placeholder="e.g. Find best wireless headphones, research competitor prices, and plot sales revenue...")
-    goal_to_run = getattr(st.session_state, "collab_input", None) or user_goal
-    st.session_state.collab_input = None
-
-    if st.button("🚀 Launch Collaborative Multi-Agent Execution", type="primary", width="stretch") and goal_to_run:
-        st.markdown(f"### 🎯 Active Mission: *{goal_to_run}*")
+    if st.button("🚀 Launch Multi-Agent Execution", type="primary", width="stretch") and goal_to_run:
+        st.markdown(f"#### 🎯 Goal: *{goal_to_run}*")
+        t0 = time.perf_counter()
         
-        with st.status("🤖 Coordinating Autonomous Agents...", expanded=True) as status:
-            st.write("🛍️ **Agent 01** inspecting product specifications & ChromaDB inventory...")
+        with st.status("🤖 Orchestrating Multi-Agent Team...", expanded=True) as status_box:
+            st.write("🛍️ **Agent 01** inspecting catalog specifications & ChromaDB inventory...")
             collab_result = network.run_collaborative_workflow(goal_to_run)
-            status.update(label="✅ Multi-Agent Collaboration Complete!", state="complete", expanded=False)
+            status_box.update(label="✅ Multi-Agent Collaboration Complete!", state="complete", expanded=False)
 
-        # 3 Agent Output Tabs
+        t_elapsed = round(time.perf_counter() - t0, 2)
+        st.session_state.last_metrics = {"latency": t_elapsed, "tools": 3}
+
+        # Render 3 Agent Steps
         t1, t2, t3, t4 = st.tabs([
-            "🛍️ 1. Catalog & Ground Truth (Agent 01)",
+            "🛍️ 1. Catalog & Specs (Agent 01)",
             "🔍 2. Market Intelligence (Agent 02)",
             "📊 3. Sales Analytics (Agent 03)",
             "📑 Shared Vault Executive Brief"
@@ -311,78 +308,72 @@ if "Collaborative" in selected_mode:
                 data=collab_result["final_summary"],
                 file_name="collaborative_executive_brief.md",
                 mime="text/markdown",
-                width="stretch"
+                width="stretch",
             )
 
-# -------------------------------------------------------------
-# WORKSPACE 2: AGENT 01 (PRODUCTS & SHOPPING)
-# -------------------------------------------------------------
-elif "01" in selected_mode:
-    st.markdown("## 🛍️ Agent 01: Product Query & Shopping Assistant")
-    col_img, col_chat = st.columns([1, 3])
-    with col_img:
-        st.image("assets/agent_01_product.jpg", width="stretch")
-        st.markdown("**Tools:** `get_product`, `search_catalog`, `query_user_manuals`, `convert_currency_price`, `generate_customer_invoice_pdf`")
-    
-    with col_chat:
-        q1 = st.text_input("Ask Agent 01:", value="What 4K monitors do you have in stock under $600 with 90W USB-C charging?")
-        if st.button("Send Inquiry to Agent 01", type="primary"):
-            with st.spinner("Agent 01 is searching catalog & ChromaDB memory..."):
-                t0 = time.time()
-                ans = network.agent_01.ask(q1)
-                t_elapsed = round(time.time() - t0, 2)
-                st.success(f"Response generated in {t_elapsed}s")
-                st.markdown(ans)
 
-# -------------------------------------------------------------
-# WORKSPACE 3: AGENT 02 (WEB RESEARCH & COMPETITOR INTEL)
-# -------------------------------------------------------------
-elif "02" in selected_mode:
-    st.markdown("## 🔍 Agent 02: Autonomous Web Research Agent")
-    col_img, col_chat = st.columns([1, 3])
-    with col_img:
-        st.image("assets/agent_02_research.jpg", width="stretch")
-        st.markdown("**Tools:** `search_tech_web`, `compare_competitor_retail_prices`, `scrape_webpage`, `save_research_brief_to_shared_vault`")
-    
-    with col_chat:
-        q2 = st.text_input("Ask Agent 02:", value="Find competitor prices for Sony WH-1000XM5 and identify the best deal.")
-        if st.button("Send Inquiry to Agent 02", type="primary"):
-            with st.spinner("Agent 02 is scanning live web prices & tech reviews..."):
-                t0 = time.time()
-                ans = network.agent_02.ask(q2)
-                t_elapsed = round(time.time() - t0, 2)
-                st.success(f"Market search completed in {t_elapsed}s")
-                st.markdown(ans)
+# =============================================================
+# WORKSPACE 2: AGENT 01 (PRODUCTS & CHAT)
+# =============================================================
+elif "01" in active_workspace:
+    st.markdown("### 🛍️ **Agent 01: Product Query & Shopping Assistant**")
+    st.caption("Equipped with ChromaDB long-term memory, grounding verification, catalog lookups, and PDF invoices.")
 
-# -------------------------------------------------------------
-# WORKSPACE 4: AGENT 03 (SQL & TABULAR ANALYST)
-# -------------------------------------------------------------
-elif "03" in selected_mode:
-    st.markdown("## 📊 Agent 03: SQL & Tabular Data Analyst Agent")
-    col_img, col_chat = st.columns([1, 3])
-    with col_img:
-        st.image("assets/agent_03_analyst.jpg", width="stretch")
-        st.markdown("**Tools:** `get_database_schema`, `run_sql_query`, `generate_category_revenue_chart`, `check_stockout_risks`")
-    
-    with col_chat:
-        q3 = st.text_input("Ask Agent 03:", value="Calculate total revenue and sales volume across all categories and show a chart.")
-        if st.button("Send Inquiry to Agent 03", type="primary"):
-            with st.spinner("Agent 03 is formulating SQL & computing analytics..."):
-                t0 = time.time()
-                ans = network.agent_03.ask(q3)
-                t_elapsed = round(time.time() - t0, 2)
-                st.success(f"SQL execution completed in {t_elapsed}s")
-                st.markdown(ans)
+    q1 = st.text_input("Ask Agent 01:", value="What 4K monitors do you have in stock under $600 with 90W USB-C charging?")
+    if st.button("Send Inquiry to Agent 01", type="primary"):
+        with st.status("⚡ Agent 01 is reasoning...", expanded=True) as status:
+            t0 = time.perf_counter()
+            ans = network.agent_01.ask(q1)
+            t_elapsed = round(time.perf_counter() - t0, 2)
+            status.update(label=f"✅ Response Generated in {t_elapsed}s", state="complete", expanded=False)
+            st.session_state.last_metrics = {"latency": t_elapsed, "tools": 1}
+        st.markdown(ans)
 
-# -------------------------------------------------------------
-# WORKSPACE 5: 3-PILLAR EVALUATION BENCHMARK
-# -------------------------------------------------------------
-elif "Evaluation" in selected_mode:
-    st.markdown("## 🧪 3-Pillar Agent Evaluation Studio")
-    st.markdown("Automated evaluation measuring **Functional Accuracy**, **Latency & Cost**, and **Safety/PII Compliance**.")
+
+# =============================================================
+# WORKSPACE 3: AGENT 02 (WEB RESEARCH)
+# =============================================================
+elif "02" in active_workspace:
+    st.markdown("### 🔍 **Agent 02: Autonomous Web Research Agent**")
+    st.caption("Live competitor price-matching (Amazon, Best Buy, B&H, Walmart), tech reviews, and research briefs.")
+
+    q2 = st.text_input("Ask Agent 02:", value="Find competitor prices for Sony WH-1000XM5 and identify the best retail deal.")
+    if st.button("Send Inquiry to Agent 02", type="primary"):
+        with st.status("🔍 Agent 02 scanning web sources...", expanded=True) as status:
+            t0 = time.perf_counter()
+            ans = network.agent_02.ask(q2)
+            t_elapsed = round(time.perf_counter() - t0, 2)
+            status.update(label=f"✅ Research Completed in {t_elapsed}s", state="complete", expanded=False)
+            st.session_state.last_metrics = {"latency": t_elapsed, "tools": 1}
+        st.markdown(ans)
+
+
+# =============================================================
+# WORKSPACE 4: AGENT 03 (SQL ANALYST)
+# =============================================================
+elif "03" in active_workspace:
+    st.markdown("### 📊 **Agent 03: SQL & Tabular Data Analyst Agent**")
+    st.caption("Read-only safe SQL queries, transactional sales performance, category revenue charts, and stockout forecasting.")
+
+    q3 = st.text_input("Ask Agent 03:", value="Calculate total revenue and sales volume across all categories and show a visual chart.")
+    if st.button("Send Inquiry to Agent 03", type="primary"):
+        with st.status("📊 Formulating SQL & computing analytics...", expanded=True) as status:
+            t0 = time.perf_counter()
+            ans = network.agent_03.ask(q3)
+            t_elapsed = round(time.perf_counter() - t0, 2)
+            status.update(label=f"✅ SQL Analytics Completed in {t_elapsed}s", state="complete", expanded=False)
+            st.session_state.last_metrics = {"latency": t_elapsed, "tools": 1}
+        st.markdown(ans)
+
+
+# =============================================================
+# WORKSPACE 5: 3-PILLAR EVALS BENCHMARK
+# =============================================================
+elif "Evals" in active_workspace:
+    st.markdown("### 🧪 **3-Pillar Agent Evaluation Studio**")
+    st.caption("Automated evaluation measuring **Functional Accuracy**, **Latency & Cost**, and **Safety/PII Compliance**.")
 
     eval_runner = EvaluationRunner(network=network)
-
     tab_single, tab_golden = st.tabs(["🎯 Live Single Interaction Eval", "📈 Golden Benchmark Suite"])
 
     with tab_single:
@@ -418,7 +409,6 @@ elif "Evaluation" in selected_mode:
             st.subheader("Agent Response Output")
             st.markdown(scorecard["response"])
 
-            # Deep Pillar Breakdown
             col_p1, col_p2, col_p3 = st.columns(3)
             with col_p1:
                 st.markdown("#### 1. Functional Breakdown")
@@ -446,3 +436,33 @@ elif "Evaluation" in selected_mode:
                     st.write(f"*Q:* {tcr['question']}")
                     st.write(f"*A:* {tcr['response'][:250]}...")
                     st.markdown("---")
+
+
+# =============================================================
+# WORKSPACE 6: SHARED VAULT EXPLORER
+# =============================================================
+elif "Vault" in active_workspace:
+    st.markdown("### 📁 **Secure Workspace Vault Explorer**")
+    st.caption("Sandboxed file vault (`shared/workspace/`) where agents exchange generated reports, datasets, and invoices.")
+
+    v_files = vault.list_shared_files()
+    if v_files:
+        for vf in v_files:
+            with st.container(border=True):
+                c_fn, c_act = st.columns([3, 1])
+                with c_fn:
+                    st.markdown(f"📄 **{vf['filename']}**")
+                    st.caption(f"Size: {vf['size_bytes']} bytes • Modified: {vf['modified_at']}")
+                with c_act:
+                    f_data = vault.read_file(vf['filename'], reader_agent="UI_User")
+                    if f_data["status"] == "success":
+                        st.download_button(
+                            label="⬇️ Download",
+                            data=f_data["content"],
+                            file_name=vf['filename'],
+                            mime="text/markdown",
+                            width="stretch",
+                            key=f"dl_{vf['filename']}"
+                        )
+    else:
+        st.info("Vault is currently empty. Run a multi-agent collaborative task to generate executive briefs!")

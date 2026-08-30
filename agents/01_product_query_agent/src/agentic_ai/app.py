@@ -1,147 +1,231 @@
 """
-Enterprise Streamlit Web Application for High-Level Agentic AI.
-Features:
-- Pluggable Connectors & Modular Work Plugins
-- ChromaDB Persistent Long-Term Memory
-- Anti-Hallucination Ground-Truth Verification
-- Conversation Thread Persistence (Checkpointer)
-- Multi-LLM Provider Switching (Groq & Gemini)
-- PDF Invoice Generation & Downloads
+🌐 My Agents: Premium Autonomous AI SaaS Workspace
+Clean, high-performance production UI with Progressive Execution, ChromaDB Grounding,
+Persistent Memory, and Integrated Tool Workspaces.
 """
 
 import os
 import sys
+import time
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-# Add src to python path
+# Add source directory to Python path
 current_file = Path(__file__).resolve()
 src_dir = current_file.parent.parent
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
+root_dir = src_dir.parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 
 import streamlit as st
-from langchain_core.messages import AIMessage, HumanMessage
 from dotenv import load_dotenv
 
 from agentic_ai.core import HighLevelAgent, get_llm
-from agentic_ai.plugins import PluginRegistry, CatalogPlugin, RAGSupportPlugin, FinancePlugin, InvoicePlugin, MemoryPlugin
-from agentic_ai.connectors import DatabaseConnector, VectorRAGConnector, RESTAPIConnector, PDFConnector, ChromaMemoryConnector
+from agentic_ai.plugins import (
+    PluginRegistry,
+    CatalogPlugin,
+    RAGSupportPlugin,
+    FinancePlugin,
+    InvoicePlugin,
+    MemoryPlugin,
+)
+from agentic_ai.connectors import (
+    DatabaseConnector,
+    VectorRAGConnector,
+    RESTAPIConnector,
+    PDFConnector,
+    ChromaMemoryConnector,
+)
 from agentic_ai.products_data import PRODUCTS, DISCOUNTS
-from agentic_ai.connectors.vector_connector import MANUAL_DOCUMENTS
 
-# Load environment variables
+# Load environment configurations
 load_dotenv(current_file.parent / ".env")
-load_dotenv(src_dir.parent / ".env")
+load_dotenv(src_dir / ".env")
+load_dotenv(root_dir / ".env")
 
-# Page Configuration
+# -------------------------------------------------------------
+# PAGE SETUP & PREMIUM DESIGN SYSTEM
+# -------------------------------------------------------------
 st.set_page_config(
-    page_title="Agentic AI: Memory & ChromaDB",
-    page_icon="🧠",
+    page_title="My Agents: Autonomous Product Workspace",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS Styling
+# Custom High-End SaaS Styling (Linear / Vercel / Perplexity aesthetic)
 st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
-    .main-header {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #1E293B;
-        margin-bottom: 0.2rem;
+    /* CSS Variables Design Tokens */
+    :root {
+        --bg-primary: #0B0F14;
+        --bg-secondary: #111720;
+        --bg-elevated: #151C26;
+        --border-subtle: #222C38;
+        --border-hover: #334155;
+        --text-primary: #F5F7FA;
+        --text-secondary: #94A3B8;
+        --text-muted: #64748B;
+        --accent-primary: #7C5CFF;
+        --accent-hover: #8B70FF;
+        --accent-glow: rgba(124, 92, 255, 0.15);
+        --success: #22C55E;
+        --warning: #F59E0B;
+        --error: #EF4444;
     }
-    .sub-header {
-        font-size: 1.05rem;
-        color: #64748B;
-        margin-bottom: 1.2rem;
+
+    /* Global Streamlit App Overrides */
+    .stApp {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    .badge-grounded {
-        background-color: #ECFDF5;
-        color: #065F46;
-        border: 1px solid #A7F3D0;
-        padding: 4px 10px;
+
+    /* Top Bar Header */
+    .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 18px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-subtle);
         border-radius: 12px;
-        font-weight: 600;
-        font-size: 0.85rem;
+        margin-bottom: 20px;
     }
-    .memory-card {
-        background: #F0FDF4;
-        border: 1px solid #BBF7D0;
+    .top-bar-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .top-bar-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        background: rgba(34, 197, 94, 0.12);
+        color: #4ADE80;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .telemetry-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        background: rgba(124, 92, 255, 0.12);
+        color: #A78BFA;
+        border: 1px solid rgba(124, 92, 255, 0.3);
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .pulse-dot {
+        width: 6px;
+        height: 6px;
+        background: #22C55E;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #22C55E;
+    }
+
+    /* Message Bubbles */
+    .user-msg-container {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin-bottom: 14px;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+    .assistant-msg-container {
+        background: transparent;
+        border: 1px solid transparent;
+        padding: 4px 6px 16px 6px;
+        margin-bottom: 16px;
+        color: var(--text-primary);
+        line-height: 1.6;
+    }
+
+    /* Tool Call Chips */
+    .tool-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        background: rgba(124, 92, 255, 0.08);
+        border: 1px solid rgba(124, 92, 255, 0.25);
         border-radius: 8px;
-        padding: 12px;
+        color: #C4B5FD;
+        margin-right: 6px;
+        margin-bottom: 6px;
+    }
+
+    /* Empty State Suggestion Cards */
+    .suggestion-box {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 16px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        height: 100%;
+    }
+    .suggestion-box:hover {
+        border-color: var(--accent-primary);
+        background: var(--bg-elevated);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+    .suggestion-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .suggestion-desc {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        line-height: 1.4;
+    }
+
+    /* Memory Card */
+    .memory-item {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 14px;
         margin-bottom: 10px;
+    }
+
+    /* Sidebar Clean Styling */
+    section[data-testid="stSidebar"] {
+        background-color: var(--bg-secondary) !important;
+        border-right: 1px solid var(--border-subtle) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Session State
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "messages_display" not in st.session_state:
-    st.session_state.messages_display = [
-        {
-            "role": "assistant",
-            "content": "👋 Welcome to the **Agentic AI System with ChromaDB & Persistent Memory**!\n\nI retain long-term user preferences across sessions and ground all answers using verified ChromaDB documents to prevent hallucinations.",
-            "tool_calls": [],
-        }
-    ]
-if "selected_query" not in st.session_state:
-    st.session_state.selected_query = None
-
-# Sidebar Controls
-with st.sidebar:
-    st.title("⚙️ Orchestrator Setup")
-
-    # User & Thread Persistence Controls
-    st.subheader("👤 User Identity & Thread Session")
-    user_id = st.text_input("Customer ID / Username", value="alex_smith", help="ChromaDB stores preferences under this user ID")
-    thread_id = st.text_input("Conversation Thread ID", value="thread_session_1", help="LangGraph checkpointer maintains thread history")
-
-    st.markdown("---")
-    # LLM Provider & Model Selection
-    provider = st.radio("LLM Provider", ["Groq (Fast)", "Google Gemini"], horizontal=True)
-    
-    if "Groq" in provider:
-        selected_provider = "groq"
-        model_choice = st.selectbox(
-            "Model",
-            options=["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"],
-            index=0
-        )
-    else:
-        selected_provider = "google"
-        model_choice = st.selectbox(
-            "Model",
-            options=["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
-            index=0
-        )
-
-    temperature = st.slider("Temperature (0.0 = Strictest Grounding)", 0.0, 1.0, 0.0, 0.05)
-
-    st.markdown("---")
-    st.subheader("🧩 Work Plugins")
-    enable_catalog = st.checkbox("📦 Catalog & Inventory Plugin", value=True)
-    enable_rag = st.checkbox("📚 User Manuals RAG Plugin", value=True)
-    enable_finance = st.checkbox("💱 Finance & Currency Plugin", value=True)
-    enable_invoice = st.checkbox("📄 PDF Invoice Plugin", value=True)
-    enable_memory = st.checkbox("🧠 ChromaDB Memory & Grounding Plugin", value=True)
-
-    st.markdown("---")
-    if st.button("🗑️ Clear Active Thread History", use_container_width=True):
-        st.session_state.chat_history = []
-        st.session_state.messages_display = [
-            {
-                "role": "assistant",
-                "content": f"👋 Thread `{thread_id}` reset! How can I assist you today, **{user_id}**?",
-                "tool_calls": [],
-            }
-        ]
-        st.rerun()
-
-
-# Initialize Connectors
+# -------------------------------------------------------------
+# GLOBAL CACHED CONNECTORS & AGENT FACTORY
+# -------------------------------------------------------------
 @st.cache_resource
-def get_connectors():
+def initialize_cached_connectors():
+    """Cache persistent connectors across all reruns."""
     db = DatabaseConnector()
     rag = VectorRAGConnector()
     api = RESTAPIConnector()
@@ -151,183 +235,372 @@ def get_connectors():
         c.connect()
     return db, rag, api, pdf, chroma
 
-db_conn, rag_conn, api_conn, pdf_conn, chroma_conn = get_connectors()
+db_conn, rag_conn, api_conn, pdf_conn, chroma_conn = initialize_cached_connectors()
 
-def build_agent():
+
+@st.cache_resource
+def get_cached_agent(
+    provider_name: str,
+    model_id: str,
+    temp: float,
+    cat_on: bool,
+    rag_on: bool,
+    fin_on: bool,
+    inv_on: bool,
+    mem_on: bool,
+):
+    """
+    Cache compiled LangGraph agent instance to avoid expensive graph reconstruction on every rerun.
+    """
     registry = PluginRegistry()
-    registry.register(CatalogPlugin(db_connector=db_conn, enabled=enable_catalog))
-    registry.register(RAGSupportPlugin(vector_connector=rag_conn, enabled=enable_rag))
-    registry.register(FinancePlugin(api_connector=api_conn, enabled=enable_finance))
-    registry.register(InvoicePlugin(pdf_connector=pdf_conn, db_connector=db_conn, enabled=enable_invoice))
-    registry.register(MemoryPlugin(chroma_connector=chroma_conn, enabled=enable_memory))
-    
-    llm = get_llm(provider=selected_provider, model_name=model_choice, temperature=temperature)
-    agent = HighLevelAgent(llm=llm, registry=registry)
-    agent.chroma_conn = chroma_conn
+    registry.register(CatalogPlugin(db_connector=db_conn, enabled=cat_on))
+    registry.register(RAGSupportPlugin(vector_connector=rag_conn, enabled=rag_on))
+    registry.register(FinancePlugin(api_connector=api_conn, enabled=fin_on))
+    registry.register(InvoicePlugin(pdf_connector=pdf_conn, db_connector=db_conn, enabled=inv_on))
+    registry.register(MemoryPlugin(chroma_connector=chroma_conn, enabled=mem_on))
+
+    llm = get_llm(provider=provider_name, model_name=model_id, temperature=temp)
+    agent = HighLevelAgent(
+        llm=llm,
+        registry=registry,
+        chroma_conn=chroma_conn,
+    )
     return agent
 
 
-# Main Tabs
-tab_chat, tab_memory, tab_grounding, tab_catalog, tab_invoices = st.tabs([
-    "💬 Assistant with Persistent Memory",
-    "🧠 ChromaDB User Memories",
-    "🛡️ Anti-Hallucination Grounding",
-    "📦 Product Catalog",
-    "📄 Invoices & Downloads"
-])
+# -------------------------------------------------------------
+# SESSION STATE MANAGEMENT
+# -------------------------------------------------------------
+if "messages_display" not in st.session_state:
+    st.session_state.messages_display = []
+if "active_view" not in st.session_state:
+    st.session_state.active_view = "💬 Chat Workspace"
+if "last_telemetry" not in st.session_state:
+    st.session_state.last_telemetry = None
+if "pending_prompt" not in st.session_state:
+    st.session_state.pending_prompt = None
 
-# ================= TAB 1: Assistant =================
-with tab_chat:
-    col_hdr, col_badge = st.columns([3, 1])
-    with col_hdr:
-        st.markdown('<div class="main-header">🧠 Persistent Memory & Grounded Agent</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="sub-header">Active User: <strong>{user_id}</strong> | Thread: <strong>{thread_id}</strong></div>', unsafe_allow_html=True)
-    with col_badge:
-        st.markdown('<br><span class="badge-grounded">🛡️ ChromaDB Grounding: ON</span>', unsafe_allow_html=True)
+# -------------------------------------------------------------
+# SIDEBAR NAVIGATION & CONFIGURATION
+# -------------------------------------------------------------
+with st.sidebar:
+    st.markdown("### ⚡ **My Agents**")
+    st.caption("Grounded Autonomous Agent Workspace")
 
-    # Quick suggestion buttons
-    st.markdown("**💡 Quick Multi-Turn Actions:**")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        if st.button("💾 Save User Preference", use_container_width=True):
-            st.session_state.selected_query = f"Remember that I own an Apple MacBook Air M3 and strictly need a 4K monitor under $600 with 90W USB-C charging."
-    with c2:
-        if st.button("🎯 Recall & Recommend", use_container_width=True):
-            st.session_state.selected_query = "Based on my owned laptop and saved budget, which monitor do you recommend?"
-    with c3:
-        if st.button("🛡️ Grounded Spec Verification", use_container_width=True):
-            st.session_state.selected_query = "Verify the exact charging wattage, contrast ratio, and warranty of the Dell UltraSharp 27 4K monitor using verified ground-truth."
-    with c4:
-        if st.button("🧾 Generate Invoice", use_container_width=True):
-            st.session_state.selected_query = f"Generate an official order invoice PDF for customer {user_id} purchasing 1 Dell UltraSharp 27 with code TECHSAVINGS10."
+    if st.button("➕ New Conversation", width="stretch", type="primary"):
+        st.session_state.messages_display = []
+        st.session_state.last_telemetry = None
+        st.rerun()
 
     st.markdown("---")
+    st.markdown("##### 🧭 Workspace Navigation")
+    nav_view = st.radio(
+        "Navigation",
+        [
+            "💬 Chat Workspace",
+            "🧠 Memory Explorer",
+            "🛡️ Grounding Lab",
+            "📦 Product Catalog",
+            "📄 Invoice Document Hub",
+        ],
+        label_visibility="collapsed",
+    )
+    st.session_state.active_view = nav_view
 
-    # Render Chat History
+    st.markdown("---")
+    with st.expander("👤 User Identity & Session", expanded=True):
+        user_id = st.text_input("User ID", value="alex_smith", help="ChromaDB stores user memory facts under this identifier")
+        thread_id = st.text_input("Thread ID", value="session_main", help="LangGraph checkpointer tracks conversation context")
+
+    with st.expander("⚙️ Model & Engine Setup", expanded=False):
+        provider_radio = st.radio("Provider", ["Primary (Ultra Fast)", "Groq LPU Direct", "Google Gemini"])
+        if "Primary" in provider_radio:
+            active_prov = "primary"
+            active_model = "gpt-4o-mini"
+        elif "Groq" in provider_radio:
+            active_prov = "groq"
+            active_model = st.selectbox("Groq Model", ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"])
+        else:
+            active_prov = "google"
+            active_model = st.selectbox("Gemini Model", ["gemini-2.5-flash", "gemini-1.5-flash"])
+
+        temp_val = st.slider("Temperature", 0.0, 1.0, 0.0, 0.05, help="0.0 for deterministic tool execution")
+
+    with st.expander("🧩 Capabilities & Plugins", expanded=False):
+        en_catalog = st.toggle("📦 Product Catalog", value=True)
+        en_rag = st.toggle("📚 User Manuals RAG", value=True)
+        en_finance = st.toggle("💱 Multi-Currency & Tax", value=True)
+        en_invoice = st.toggle("📄 PDF Invoicing", value=True)
+        en_memory = st.toggle("🧠 ChromaDB Memory", value=True)
+
+    st.markdown("---")
+    if st.button("🗑️ Reset Active Thread", width="stretch"):
+        st.session_state.messages_display = []
+        st.session_state.last_telemetry = None
+        st.success(f"Thread '{thread_id}' cleared.")
+        st.rerun()
+
+# Build or retrieve cached agent
+agent_instance = get_cached_agent(
+    provider_name=active_prov,
+    model_id=active_model,
+    temp=temp_val,
+    cat_on=en_catalog,
+    rag_on=en_rag,
+    fin_on=en_finance,
+    inv_on=en_invoice,
+    mem_on=en_memory,
+)
+
+# -------------------------------------------------------------
+# TOP BAR HEADER
+# -------------------------------------------------------------
+telemetry_html = ""
+if st.session_state.last_telemetry:
+    t = st.session_state.last_telemetry
+    telemetry_html = f"""<span class="telemetry-badge">⏱️ {t.get('total_seconds', 0)}s | {t.get('tool_count', 0)} tools | mem: {t.get('memory_retrieval_ms', 0)}ms</span>"""
+
+st.markdown(f"""
+<div class="top-bar">
+    <div class="top-bar-title">
+        <span>🛍️</span> Product & Shopping Intelligence Agent
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+        <span class="top-bar-badge"><span class="pulse-dot"></span> ChromaDB Grounded</span>
+        {telemetry_html}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# =============================================================
+# VIEW 1: CHAT WORKSPACE (PRIMARY)
+# =============================================================
+if st.session_state.active_view == "💬 Chat Workspace":
+
+    # Empty State with Production Suggestions
+    if not st.session_state.messages_display:
+        st.markdown("### 💬 **What can I help you accomplish today?**")
+        st.markdown(f"Active User: `{user_id}` • Conversation Thread: `{thread_id}`")
+        
+        col_s1, col_s2, col_s3 = st.columns(3)
+        with col_s1:
+            if st.button("💾 **Save User Preference**\n\nRemember laptop ownership & 4K monitor budget.", width="stretch"):
+                st.session_state.pending_prompt = f"Remember that I own an Apple MacBook Air M3 and strictly need a 4K monitor under $600 with 90W USB-C charging."
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🧾 **Generate PDF Invoice**\n\nCreate official order invoice with coupon discount.", width="stretch"):
+                st.session_state.pending_prompt = f"Generate an official order invoice PDF for customer {user_id} purchasing 1 Dell UltraSharp 27 with code TECHSAVINGS10."
+
+        with col_s2:
+            if st.button("🎯 **Recall & Recommend**\n\nRecommend a monitor tailored to saved preferences.", width="stretch"):
+                st.session_state.pending_prompt = "Based on my owned laptop and saved budget, which monitor do you recommend?"
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💱 **Multi-Currency Pricing**\n\nConvert headphone prices to EUR, GBP, INR with tax.", width="stretch"):
+                st.session_state.pending_prompt = "Convert the price of Sony WH-1000XM5 headphones into EUR, GBP, and INR with 8.5% sales tax."
+
+        with col_s3:
+            if st.button("🛡️ **Grounded Spec Check**\n\nVerify charging wattage & warranty with ChromaDB.", width="stretch"):
+                st.session_state.pending_prompt = "Verify the exact charging wattage, contrast ratio, and warranty of the Dell UltraSharp 27 4K monitor using verified ground-truth."
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("📚 **RAG Manual Troubleshooting**\n\nCheck MacBook dual monitor clamshell setup.", width="stretch"):
+                st.session_state.pending_prompt = "How do I configure dual external monitors on MacBook Air M3 according to the official manual?"
+
+        st.markdown("---")
+
+    # Render Conversation Messages
     for msg in st.session_state.messages_display:
-        with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
-            st.markdown(msg["content"])
-            if msg.get("tool_calls"):
-                with st.expander(f"🔍 Tools Triggered ({len(msg['tool_calls'])})", expanded=False):
+        if msg["role"] == "user":
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(msg["content"])
+        else:
+            with st.chat_message("assistant", avatar="⚡"):
+                # Render tool summary chips
+                if msg.get("tool_calls"):
+                    chips_html = '<div style="margin-bottom: 8px;">'
                     for tc in msg["tool_calls"]:
+                        name = tc.get("name", "Tool")
+                        clean_name = name.replace("_", " ").title()
+                        chips_html += f'<span class="tool-chip">✓ {clean_name}</span>'
+                    chips_html += '</div>'
+                    st.markdown(chips_html, unsafe_allow_html=True)
+                
+                st.markdown(msg["content"])
+                
+                # Expandable technical inspect
+                if msg.get("tool_calls"):
+                    with st.expander(f"⚙️ Execution Trace ({len(msg['tool_calls'])} tools)", expanded=False):
+                        for tc in msg["tool_calls"]:
+                            st.markdown(f"**Tool:** `{tc.get('name')}`")
+                            st.json(tc.get("args"))
+
+    # Chat Input Box
+    user_typed = st.chat_input("Ask a grounded product question, recall saved preferences, or generate invoices...")
+    prompt_to_execute = st.session_state.pending_prompt or user_typed
+    st.session_state.pending_prompt = None
+
+    if prompt_to_execute:
+        st.session_state.messages_display.append({
+            "role": "user",
+            "content": prompt_to_execute,
+            "tool_calls": [],
+        })
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(prompt_to_execute)
+
+        with st.chat_message("assistant", avatar="⚡"):
+            # Staged Progressive Execution Status
+            with st.status("⚡ Agent is processing...", expanded=True) as status_box:
+                st.write("🔍 **Recalling user context** from ChromaDB persistent memory...")
+                t_start = time.perf_counter()
+                
+                # Execute agent query
+                res = agent_instance.invoke_with_trace(
+                    question=prompt_to_execute,
+                    user_id=user_id,
+                    thread_id=thread_id,
+                )
+                
+                st.write("🛡️ **Verifying specifications & executing tools**...")
+                time.sleep(0.1)  # smooth visual transition
+                status_box.update(label="✅ Response Generated", state="complete", expanded=False)
+
+            answer = res.get("output", "No response generated.")
+            tool_calls = res.get("tool_calls", [])
+            telemetry = res.get("telemetry", {})
+
+            # Store telemetry
+            st.session_state.last_telemetry = telemetry
+
+            # Render tool summary chips
+            if tool_calls:
+                chips_html = '<div style="margin-bottom: 8px;">'
+                for tc in tool_calls:
+                    name = tc.get("name", "Tool")
+                    clean_name = name.replace("_", " ").title()
+                    chips_html += f'<span class="tool-chip">✓ {clean_name}</span>'
+                chips_html += '</div>'
+                st.markdown(chips_html, unsafe_allow_html=True)
+
+            st.markdown(answer)
+
+            if tool_calls:
+                with st.expander(f"⚙️ Execution Trace ({len(tool_calls)} tools)", expanded=False):
+                    for tc in tool_calls:
                         st.markdown(f"**Tool:** `{tc.get('name')}`")
                         st.json(tc.get("args"))
 
-    # Chat Input
-    user_input = st.chat_input("Ask a grounded product question or save customer preferences...")
-    query_to_run = st.session_state.selected_query or user_input
-    st.session_state.selected_query = None
-
-    if query_to_run:
-        st.session_state.messages_display.append({"role": "user", "content": query_to_run, "tool_calls": []})
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(query_to_run)
-
-        with st.chat_message("assistant", avatar="🤖"):
-            with st.spinner("🤖 Recalling user memories & verifying facts from ChromaDB..."):
-                try:
-                    agent = build_agent()
-                    res = agent.invoke_with_trace(
-                        question=query_to_run,
-                        user_id=user_id,
-                        thread_id=thread_id,
-                    )
-                    answer = res.get("output", "No response generated.")
-                    tool_calls = res.get("tool_calls", [])
-
-                    st.markdown(answer)
-
-                    if tool_calls:
-                        with st.expander(f"🔍 Tools Triggered ({len(tool_calls)})", expanded=False):
-                            for tc in tool_calls:
-                                st.markdown(f"**Tool:** `{tc.get('name')}`")
-                                st.json(tc.get("args"))
-
-                    st.session_state.messages_display.append({
-                        "role": "assistant",
-                        "content": answer,
-                        "tool_calls": tool_calls,
-                    })
-
-                except Exception as err:
-                    err_text = f"❌ **Error:** {err}"
-                    st.error(err_text)
-                    st.session_state.messages_display.append({
-                        "role": "assistant",
-                        "content": err_text,
-                        "tool_calls": [],
-                    })
+            st.session_state.messages_display.append({
+                "role": "assistant",
+                "content": answer,
+                "tool_calls": tool_calls,
+                "telemetry": telemetry,
+            })
+            st.rerun()
 
 
-# ================= TAB 2: ChromaDB Memories =================
-with tab_memory:
-    st.header(f"🧠 Long-Term Memories for '{user_id}' in ChromaDB")
-    st.write("These user facts are stored persistently on disk in `./data/chroma_db` and recalled across conversation sessions.")
-    
-    # Manual Add Memory Box
-    with st.expander("➕ Manually Add User Preference / Fact to ChromaDB"):
-        new_fact = st.text_input("New Fact/Preference", placeholder="e.g. User prefers silver color and requires ANC headphones.")
-        if st.button("Save to ChromaDB"):
-            if new_fact:
-                chroma_conn.save_user_memory(user_id=user_id, memory_fact=new_fact)
-                st.success("Saved memory to persistent ChromaDB!")
-                st.rerun()
+# =============================================================
+# VIEW 2: MEMORY EXPLORER
+# =============================================================
+elif st.session_state.active_view == "🧠 Memory Explorer":
+    st.markdown("### 🧠 **ChromaDB Long-Term Memory Explorer**")
+    st.caption(f"Persisted facts stored for user `{user_id}` on disk in `./data/chroma_db`.")
 
+    with st.container(border=True):
+        st.markdown("##### ➕ Add Preference to Memory Store")
+        c_in, c_btn = st.columns([4, 1])
+        with c_in:
+            manual_pref = st.text_input("Fact / Preference", placeholder="e.g. User prefers midnight color and requires 90W USB-C charging.", label_visibility="collapsed")
+        with c_btn:
+            if st.button("Save Memory", width="stretch", type="primary"):
+                if manual_pref:
+                    chroma_conn.save_user_memory(user_id=user_id, memory_fact=manual_pref)
+                    st.success("Preference persisted to ChromaDB!")
+                    st.rerun()
+
+    st.markdown("##### Active User Memories")
     user_memories = chroma_conn.recall_user_memories(user_id=user_id, n_results=10)
     if user_memories:
         for idx, m in enumerate(user_memories):
             st.markdown(f"""
-            <div class="memory-card">
-                <strong>Memory #{idx+1}:</strong> {m['memory']}<br>
-                <span style="font-size:0.75rem; color:#64748B;">Category: {m['category']} | Timestamp: {m.get('created_at', 'N/A')}</span>
+            <div class="memory-item">
+                <div style="font-weight: 700; color: #F5F7FA; margin-bottom: 4px;">Memory #{idx+1}</div>
+                <div style="color: #CBD5E1; font-size: 0.9rem; margin-bottom: 6px;">{m['memory']}</div>
+                <div style="font-size: 0.75rem; color: #64748B;">🏷️ Category: <code>{m['category']}</code> • 🕒 {m.get('created_at', 'N/A')}</div>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info(f"No long-term memories stored yet for user '{user_id}'. You can tell the assistant in chat or add one above!")
-
-    st.markdown("---")
-    st.subheader("All Users in Memory Store")
-    all_mems = chroma_conn.get_all_stored_memories()
-    if all_mems:
-        st.dataframe(all_mems, use_container_width=True)
+        st.info(f"No stored memories for `{user_id}` yet. Talk to the assistant in chat to save facts automatically!")
 
 
-# ================= TAB 3: Grounding Store =================
-with tab_grounding:
-    st.header("🛡️ ChromaDB Anti-Hallucination Ground-Truth Store")
-    st.write(f"Contains **{chroma_conn.kb_collection.count()} verified documents** (hardware specs, warranties, compatibility notes, and user guides).")
-    
-    search_claim = st.text_input("Verify Claim / Search Ground Truth", value="Dell UltraSharp 27 4K IPS Black 90W USB-C")
+# =============================================================
+# VIEW 3: GROUNDING LAB
+# =============================================================
+elif st.session_state.active_view == "🛡️ Grounding Lab":
+    st.markdown("### 🛡️ **ChromaDB Anti-Hallucination Grounding Lab**")
+    st.caption(f"Search across **{chroma_conn.kb_collection.count()} verified technical documents** used for strict grounding.")
+
+    search_claim = st.text_input("Verify Technical Specification or Search Ground Truth", value="Dell UltraSharp 27 4K IPS Black 90W USB-C")
     if search_claim:
-        results = chroma_conn.verify_ground_truth(search_claim, n_results=3)
-        for r in results:
-            with st.expander(f"📄 Source: {r['metadata'].get('name', r['metadata'].get('title', 'Document'))} (Distance: {r['relevance_distance']})"):
-                st.markdown(f"**Type:** `{r['metadata'].get('type')}`")
-                st.text(r["content"])
+        results = chroma_conn.verify_ground_truth(search_claim, n_results=4)
+        for idx, r in enumerate(results):
+            with st.container(border=True):
+                dist = r.get("relevance_distance", 0.0)
+                meta = r.get("metadata", {})
+                st.markdown(f"##### 📄 {meta.get('name', meta.get('title', 'Verified Source'))} • `Distance: {dist}`")
+                st.markdown(f"**Type:** `{meta.get('type')}`")
+                st.code(r["content"], language="text")
 
 
-# ================= TAB 4: Catalog =================
-with tab_catalog:
-    st.header("📦 Product Catalog")
-    st.dataframe(db_conn.products_df, use_container_width=True)
+# =============================================================
+# VIEW 4: PRODUCT CATALOG
+# =============================================================
+elif st.session_state.active_view == "📦 Product Catalog":
+    st.markdown("### 📦 **Verified Product Catalog**")
+    st.caption("Real-time inventory database queried by the Catalog Plugin.")
+
+    cat_filter = st.selectbox("Filter Category", ["All Categories", "Laptops", "Monitors", "Audio", "Smartphones", "Smartwatches"])
+    df = db_conn.products_df
+    if cat_filter != "All Categories":
+        df = df[df["category"] == cat_filter]
+
+    st.dataframe(
+        df,
+        width="stretch",
+        column_config={
+            "price_usd": st.column_config.NumberColumn("Price (USD)", format="$%.2f"),
+            "rating": st.column_config.NumberColumn("Rating", format="⭐ %.1f"),
+            "in_stock": st.column_config.CheckboxColumn("In Stock"),
+        },
+    )
 
 
-# ================= TAB 5: Invoices =================
-with tab_invoices:
-    st.header("📄 Downloadable Invoices (PDFConnector)")
-    invoice_dir = Path("invoices")
-    if invoice_dir.exists():
-        pdf_files = list(invoice_dir.glob("*.pdf"))
-        if pdf_files:
-            for pf in sorted(pdf_files, reverse=True):
-                with open(pf, "rb") as f:
-                    st.download_button(
-                        label=f"⬇️ Download {pf.name}",
-                        data=f.read(),
-                        file_name=pf.name,
-                        mime="application/pdf",
-                    )
+# =============================================================
+# VIEW 5: INVOICE DOCUMENT HUB
+# =============================================================
+elif st.session_state.active_view == "📄 Invoice Document Hub":
+    st.markdown("### 📄 **Invoice Document Center**")
+    st.caption("Official customer PDF invoices generated with `fpdf2`.")
+
+    inv_dir = Path("invoices")
+    if inv_dir.exists():
+        pdf_list = sorted(list(inv_dir.glob("*.pdf")), reverse=True)
+        if pdf_list:
+            for pf in pdf_list:
+                with st.container(border=True):
+                    c_info, c_dl = st.columns([3, 1])
+                    with c_info:
+                        st.markdown(f"📄 **{pf.name}**")
+                        st.caption(f"Size: {pf.stat().st_size} bytes • Generated via PDFConnector")
+                    with c_dl:
+                        with open(pf, "rb") as f:
+                            st.download_button(
+                                label="⬇️ Download PDF",
+                                data=f.read(),
+                                file_name=pf.name,
+                                mime="application/pdf",
+                                width="stretch",
+                            )
         else:
-            st.info("No invoices created yet.")
+            st.info("No invoices created yet. Ask the assistant in chat to generate an invoice!")
     else:
         st.info("Invoices will appear here once generated.")

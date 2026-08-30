@@ -3,6 +3,7 @@ High-Level Modular Agent Orchestrator with Persistent Memory & ChromaDB Groundin
 Integrates Connectors, Plugin Registry, Checkpointing, and Anti-Hallucination Tools.
 """
 
+import time
 from typing import Any, Dict, List, Optional, Union
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
@@ -43,12 +44,13 @@ class HighLevelAgent:
     def __init__(
         self,
         llm: Optional[BaseChatModel] = None,
-        provider: str = "groq",
+        provider: str = "primary",
         model_name: Optional[str] = None,
         temperature: float = 0.0,
         registry: Optional[PluginRegistry] = None,
         system_prompt: str = SYSTEM_PROMPT,
         checkpointer: Optional[Any] = None,
+        chroma_conn: Optional[ChromaMemoryConnector] = None,
         debug: bool = False,
     ):
         self.llm = llm or get_llm(provider=provider, model_name=model_name, temperature=temperature)
@@ -56,9 +58,12 @@ class HighLevelAgent:
         self.debug = debug
         self.checkpointer = checkpointer or MemorySaver()
 
-        # Shared ChromaDB connector
-        self.chroma_conn = ChromaMemoryConnector()
-        self.chroma_conn.connect()
+        # Shared ChromaDB connector (reused from cache if provided)
+        if chroma_conn:
+            self.chroma_conn = chroma_conn
+        else:
+            self.chroma_conn = ChromaMemoryConnector()
+            self.chroma_conn.connect()
 
         # Initialize Plugin Registry
         if registry:
@@ -127,8 +132,9 @@ class HighLevelAgent:
         chat_history: Optional[List[BaseMessage]] = None,
     ) -> Dict[str, Any]:
         """
-        Execute query with thread persistence, message trace, and tool call logging.
+        Execute query with thread persistence, message trace, tool call logging, and latency telemetry.
         """
+        t0 = time.perf_counter()
         config = {
             "configurable": {
                 "thread_id": thread_id,
@@ -136,7 +142,10 @@ class HighLevelAgent:
         }
 
         # Check for long-term memories for this user to inject as background context
+        t_mem_start = time.perf_counter()
         memories = self.chroma_conn.recall_user_memories(user_id=user_id, n_results=3)
+        t_mem_elapsed = round((time.perf_counter() - t_mem_start) * 1000, 1)
+
         context_prefix = ""
         if memories:
             mem_bullets = "\n".join(f"- {m['memory']}" for m in memories)
@@ -149,10 +158,12 @@ class HighLevelAgent:
             messages.extend(chat_history)
         messages.append(HumanMessage(content=prompt_input))
 
+        t_graph_start = time.perf_counter()
         response_state = self._agent_graph.invoke(
             {"messages": messages},
             config=config,
         )
+        t_graph_elapsed = round((time.perf_counter() - t_graph_start) * 1000, 1)
         all_msgs = response_state.get("messages", [])
 
         # Extract final answer
@@ -176,6 +187,8 @@ class HighLevelAgent:
                         "id": tc.get("id"),
                     })
 
+        total_latency_seconds = round(time.perf_counter() - t0, 3)
+
         return {
             "output": final_answer,
             "messages": all_msgs,
@@ -183,4 +196,10 @@ class HighLevelAgent:
             "user_id": user_id,
             "thread_id": thread_id,
             "memories_recalled": len(memories),
+            "telemetry": {
+                "total_seconds": total_latency_seconds,
+                "memory_retrieval_ms": t_mem_elapsed,
+                "graph_execution_ms": t_graph_elapsed,
+                "tool_count": len(tool_calls),
+            }
         }
