@@ -1,6 +1,6 @@
 """
 Invoice & PDF Generation Plugin.
-Wraps PDFConnector to generate formal order invoices, quotations, and receipts.
+Generates formal order invoices, quotations, and receipts in a single tool call.
 """
 
 import json
@@ -45,19 +45,20 @@ class InvoicePlugin(BasePlugin):
             discount_code: Optional[str] = None,
         ) -> str:
             """
-            Generate an official downloadable PDF invoice for an order.
+            Directly generate an official downloadable PDF order invoice.
+            Automatically resolves catalog price, computes promotional discounts, and generates the PDF.
 
             Args:
-                customer_name: Full name of the customer (e.g. 'John Doe').
-                product_name_or_id: Product ID or title being ordered.
+                customer_name: Full name or ID of the customer (e.g. 'alex_smith', 'John Doe').
+                product_name_or_id: Product ID or title (e.g. 'Dell UltraSharp 27', 'MacBook Air M3', 'PROD-103').
                 quantity: Number of units (default 1).
-                discount_code: Optional promo code to apply (e.g. 'SUMMERSALE15', 'TECHSAVINGS10').
+                discount_code: Optional coupon code to apply (e.g. 'TECHSAVINGS10', 'SUMMERSALE15').
 
             Returns:
-                JSON string with invoice number, file path, and grand total.
+                JSON confirmation with invoice number, PDF filename, subtotal, discount, and grand total.
             """
             product = db_conn.get_product_by_id_or_name(product_name_or_id)
-            unit_price = product.get("price", 999.0) if product else 999.0
+            unit_price = product.get("price", 499.0) if product else 499.0
             prod_name = product.get("name", product_name_or_id) if product else product_name_or_id
 
             subtotal = unit_price * quantity
@@ -91,6 +92,16 @@ class InvoicePlugin(BasePlugin):
                 tax_amount=round((subtotal - discount_amt) * 0.075, 2),
             )
 
-            return json.dumps(result, indent=2)
+            return json.dumps({
+                "status": "success",
+                "invoice_number": result.get("invoice_number"),
+                "pdf_filename": result.get("pdf_filename"),
+                "customer": customer_name,
+                "product": prod_name,
+                "quantity": quantity,
+                "unit_price_usd": unit_price,
+                "discount_applied_usd": discount_amt,
+                "grand_total_usd": result.get("grand_total_usd"),
+            })
 
         return [generate_customer_invoice_pdf]

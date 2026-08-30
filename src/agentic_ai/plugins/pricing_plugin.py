@@ -1,10 +1,10 @@
 """
 Finance & Pricing Calculations Plugin.
-Wraps RESTAPIConnector to provide currency conversions, tax estimation, and promotional discounts.
+High-efficiency multi-currency conversions and checkout tax calculations in a single tool call.
 """
 
 import json
-from typing import List, Optional
+from typing import List, Optional, Union
 from langchain_core.tools import BaseTool, tool
 
 from agentic_ai.plugins.registry import BasePlugin
@@ -14,7 +14,7 @@ from agentic_ai.products_data import DISCOUNTS
 
 class FinancePlugin(BasePlugin):
     """
-    Plugin for currency conversions, multi-region pricing, tax calculation, and discounts.
+    Plugin for multi-currency conversions, pricing breakdowns, tax calculations, and discounts.
     """
 
     def __init__(self, api_connector: Optional[RESTAPIConnector] = None, enabled: bool = True):
@@ -30,71 +30,61 @@ class FinancePlugin(BasePlugin):
         api = self.api
 
         @tool
-        def convert_currency_price(amount_usd: float, target_currency: str) -> str:
-            """
-            Convert a USD price into foreign currencies such as EUR, GBP, INR, CAD, JPY, or AUD.
-
-            Args:
-                amount_usd: The price in USD to convert (e.g. 1099.00).
-                target_currency: Target 3-letter currency code (e.g. 'EUR', 'GBP', 'INR', 'JPY', 'CAD', 'AUD').
-
-            Returns:
-                JSON string with exchange rate and converted amount.
-            """
-            result = api.convert_currency(amount_usd=amount_usd, target_currency=target_currency)
-            return json.dumps(result, indent=2)
-
-        @tool
-        def calculate_checkout_totals(
-            subtotal_usd: float,
+        def convert_currency_and_tax(
+            amount_usd: float,
+            target_currencies: Optional[str] = "EUR,GBP,INR",
+            tax_rate_percent: Optional[float] = 8.5,
             state_code: Optional[str] = None,
-            destination_zip: Optional[str] = "90210",
-            shipping_urgency: str = "standard",
         ) -> str:
             """
-            Calculate estimated sales tax, carrier shipping fees, and final grand total for checkout.
+            Convert a USD price into one or multiple foreign currencies (e.g. 'EUR, GBP, INR, JPY')
+            and calculate sales tax in a single deterministic operation.
 
             Args:
-                subtotal_usd: Subtotal price in USD.
-                state_code: 2-letter US state code for sales tax (e.g. 'CA', 'NY', 'TX', 'FL', 'IL').
-                destination_zip: Destination ZIP code.
-                shipping_urgency: 'standard', 'two_day', or 'express'.
+                amount_usd: Base price in USD (e.g. 399.99).
+                target_currencies: Comma-separated currency codes (e.g. 'EUR,GBP,INR' or 'EUR').
+                tax_rate_percent: Optional tax rate percentage (default 8.5%).
+                state_code: Optional US state code for automatic tax rate lookup (e.g. 'CA', 'NY').
 
             Returns:
-                JSON string with subtotal, tax, shipping, and grand total.
+                JSON string with conversions for all requested currencies, tax breakdown, and totals.
             """
-            tax_info = api.calculate_sales_tax(subtotal=subtotal_usd, state_code=state_code)
-            shipping_info = api.calculate_shipping_rates(
-                weight_kg=2.0,
-                destination_zip=destination_zip or "90210",
-                urgency=shipping_urgency
-            )
+            tax_rate = tax_rate_percent if tax_rate_percent is not None else 8.5
+            if state_code:
+                tax_info = api.calculate_sales_tax(subtotal=amount_usd, state_code=state_code)
+                tax_usd = tax_info["tax_usd"]
+                tax_rate = tax_info["tax_rate_percent"]
+            else:
+                tax_usd = round(amount_usd * (tax_rate / 100.0), 2)
 
-            shipping_cost = shipping_info["shipping_cost_usd"]
-            tax_cost = tax_info["tax_usd"]
-            grand_total = round(subtotal_usd + tax_cost + shipping_cost, 2)
+            total_usd = round(amount_usd + tax_usd, 2)
+
+            # Parse target currencies
+            curr_list = [c.strip().upper() for c in target_currencies.split(",") if c.strip()] if target_currencies else ["EUR", "GBP", "INR"]
+            
+            conversions = {}
+            for c in curr_list:
+                res = api.convert_currency(amount_usd=total_usd, target_currency=c)
+                if res.get("status") == "success":
+                    conversions[c] = {
+                        "converted_total": res["converted_amount"],
+                        "exchange_rate": res["exchange_rate"],
+                        "formatted": res["formatted"],
+                    }
 
             return json.dumps({
-                "subtotal_usd": subtotal_usd,
-                "state": tax_info["state"],
-                "sales_tax_usd": tax_cost,
-                "tax_rate": f"{tax_info['tax_rate_percent']}%",
-                "carrier": shipping_info["carrier"],
-                "estimated_delivery_days": shipping_info["estimated_days"],
-                "shipping_fee_usd": shipping_cost,
-                "grand_total_usd": grand_total,
-            }, indent=2)
+                "status": "success",
+                "subtotal_usd": amount_usd,
+                "tax_rate": f"{tax_rate}%",
+                "tax_usd": tax_usd,
+                "total_usd": total_usd,
+                "multi_currency_totals": conversions,
+            })
 
         @tool
         def lookup_promotional_discounts(category_or_product: Optional[str] = None) -> str:
             """
-            Look up active promotional discount coupon codes and rebates.
-
-            Args:
-                category_or_product: Optional category or product name to filter applicable deals.
-
-            Returns:
-                JSON string with valid coupons and minimum spend.
+            Look up active promo discount codes and coupons (e.g. TECHSAVINGS10, SUMMERSALE15).
             """
             cat = category_or_product.lower().strip() if category_or_product else None
             matched = []
@@ -107,12 +97,9 @@ class FinancePlugin(BasePlugin):
                 else:
                     matched.append(d)
 
-            if not matched:
-                matched = DISCOUNTS
-
             return json.dumps({
                 "status": "success",
-                "active_coupons": matched
-            }, indent=2)
+                "active_coupons": matched or DISCOUNTS[:2]
+            })
 
-        return [convert_currency_price, calculate_checkout_totals, lookup_promotional_discounts]
+        return [convert_currency_and_tax, lookup_promotional_discounts]

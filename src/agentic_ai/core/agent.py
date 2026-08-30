@@ -19,18 +19,20 @@ from agentic_ai.plugins.invoice_plugin import InvoicePlugin
 from agentic_ai.plugins.memory_plugin import MemoryPlugin
 from agentic_ai.connectors.chroma_connector import ChromaMemoryConnector
 
-# High-density compact system prompt (avoids TPM token exhaustion)
-SYSTEM_PROMPT = """You are an expert E-Commerce AI Assistant with tools:
-- Catalog: `get_product`, `search_catalog`, `get_stock`
-- Knowledge: `query_user_manuals`, `verify_and_ground_fact`
-- Finance: `convert_currency`, `calculate_total_with_tax`, `lookup_discount`
-- Invoices: `generate_order_invoice`
+# High-density, single-turn optimized system prompt
+SYSTEM_PROMPT = """You are a high-speed E-Commerce AI Assistant.
+Tools:
+- Catalog: `get_product`, `search_catalog`, `check_warehouse_stock`
+- Support/RAG: `query_user_manuals`
+- Grounding: `verify_and_ground_fact`
+- Finance: `convert_currency_and_tax`, `lookup_promotional_discounts`
+- Invoices: `generate_customer_invoice_pdf`
 - Memory: `save_user_memory`, `recall_user_memories`
 
 Rules:
-1. Always verify technical specifications, stock, and prices using tools before answering.
-2. Recall and respect user preferences and budget.
-3. Present answers clearly with markdown bullet points and bold key values.
+1. High Efficiency: Resolve requests in 1 tool call whenever possible. `convert_currency_and_tax`, `search_catalog`, and `generate_customer_invoice_pdf` are multi-purpose tools.
+2. Accuracy: Ground technical specifications and prices strictly on tool results.
+3. Clarity: Provide concise markdown answers with bold metrics and bullet points.
 """
 
 
@@ -108,207 +110,183 @@ class HighLevelAgent:
             self._rebuild_agent()
         return res
 
-    def ask(
-        self,
-        question: str,
-        user_id: str = "default_user",
-        thread_id: str = "main_session",
-    ) -> str:
-        """
-        Execute a question with thread persistence and long-term user memory.
-        """
-        result = self.invoke_with_trace(
-            question=question,
-            user_id=user_id,
-            thread_id=thread_id,
-        )
-        return result["output"]
+    def get_registered_plugins(self) -> List[Dict[str, Any]]:
+        """List all registered plugins and active state."""
+        return self.registry.list_plugins()
 
     def stream_with_trace(
         self,
-        question: str,
+        query: str,
         user_id: str = "default_user",
-        thread_id: str = "main_session",
-        chat_history: Optional[List[BaseMessage]] = None,
+        thread_id: str = "default_thread",
     ) -> Generator[Dict[str, Any], None, None]:
         """
-        Real Token-by-Token Streaming with stage execution events and live TTFT telemetry.
+        True token-by-token streaming generator with execution trace events.
+        Yields events:
+        - {"type": "stage", "stage": "...", "detail": "..."}
+        - {"type": "tool_start", "name": "...", "args": {...}}
+        - {"type": "tool_end", "name": "...", "duration_ms": 120}
+        - {"type": "token", "content": "..."}
+        - {"type": "complete", "output": "...", "telemetry": {...}}
         """
         t0 = time.perf_counter()
-        config = {
-            "configurable": {
-                "thread_id": thread_id,
-            }
-        }
+        ttft_recorded = False
+        t_ttft = 0.0
+        active_tools_called = []
+        full_tokens = []
+        active_tool_timers = {}
 
         # Stage 1: Memory Recall
         yield {"type": "stage", "stage": "MEMORY", "detail": "Recalling user memory from ChromaDB..."}
         t_mem_start = time.perf_counter()
-        memories = self.chroma_conn.recall_user_memories(user_id=user_id, n_results=3)
-        t_mem_elapsed = round((time.perf_counter() - t_mem_start) * 1000, 1)
-
-        context_prefix = ""
-        if memories:
-            mem_bullets = "\n".join(f"- {m['memory']}" for m in memories)
-            context_prefix = f"[User '{user_id}' Preferences:\n{mem_bullets}]\n\n"
-
-        prompt_input = f"{context_prefix}{question}"
-
-        messages = []
-        if chat_history:
-            messages.extend(chat_history)
-        messages.append(HumanMessage(content=prompt_input))
-
-        # Stage 2: Graph Execution & Streaming
-        yield {"type": "stage", "stage": "ANALYZING", "detail": "Reasoning & planning tool execution..."}
-
-        accumulated_text = ""
-        tool_calls: List[Dict[str, Any]] = []
-        first_token_time: Optional[float] = None
-        tool_start_times: Dict[str, float] = {}
-
+        user_memories = []
         try:
-            for chunk, metadata in self._agent_graph.stream(
-                {"messages": messages},
-                config=config,
-                stream_mode="messages",
-            ):
-                # Detect Tool Invocations
-                if getattr(chunk, "tool_calls", None):
-                    for tc in chunk.tool_calls:
-                        t_name = tc.get("name", "tool")
-                        tool_start_times[t_name] = time.perf_counter()
-                        yield {
-                            "type": "tool_start",
-                            "name": t_name,
-                            "args": tc.get("args", {}),
-                            "id": tc.get("id"),
-                        }
+            user_memories = self.chroma_conn.recall_user_memories(user_id=user_id, query="")
+        except Exception:
+            pass
+        t_mem = round((time.perf_counter() - t_mem_start) * 1000, 1)
 
-                # Detect Tool Message Responses
-                if isinstance(chunk, ToolMessage):
-                    t_name = getattr(chunk, "name", "tool")
-                    t_dur = round((time.perf_counter() - tool_start_times.get(t_name, time.perf_counter())) * 1000, 1)
-                    tc_record = {
-                        "name": t_name,
-                        "duration_ms": t_dur,
-                        "preview": str(chunk.content)[:120],
-                    }
-                    tool_calls.append(tc_record)
+        # Context Prep
+        memory_context = ""
+        if user_memories:
+            memory_context = f"\n[User Persistent Preferences]:\n" + "\n".join(f"- {m}" for m in user_memories[:3])
+
+        augmented_query = query + memory_context if memory_context else query
+        config = {"configurable": {"thread_id": thread_id}}
+        messages = [HumanMessage(content=augmented_query)]
+
+        yield {"type": "stage", "stage": "REASONING", "detail": "LangGraph executing agent loop..."}
+
+        # Stream LangGraph events
+        for chunk, metadata in self._agent_graph.stream(
+            {"messages": messages},
+            config=config,
+            stream_mode="messages",
+        ):
+            # Check for tool invocations
+            if hasattr(chunk, "tool_calls") and chunk.tool_calls:
+                for tc in chunk.tool_calls:
+                    t_name = tc.get("name", "tool")
+                    active_tool_timers[t_name] = time.perf_counter()
                     yield {
-                        "type": "tool_end",
+                        "type": "tool_start",
                         "name": t_name,
-                        "duration_ms": t_dur,
+                        "args": tc.get("args", {}),
                     }
 
-                # Detect Content Streaming Tokens (AIMessageChunk)
-                if isinstance(chunk, AIMessageChunk) and chunk.content and not getattr(chunk, "tool_call_chunks", None):
-                    if first_token_time is None:
-                        first_token_time = time.perf_counter()
-                        yield {"type": "stage", "stage": "GENERATING", "detail": "Streaming response tokens..."}
+            # Check for tool responses
+            elif isinstance(chunk, ToolMessage):
+                t_name = chunk.name or "tool"
+                t_start = active_tool_timers.pop(t_name, time.perf_counter())
+                t_dur = round((time.perf_counter() - t_start) * 1000, 1)
+                active_tools_called.append({
+                    "name": t_name,
+                    "duration_ms": t_dur,
+                    "preview": str(chunk.content)[:120],
+                })
+                yield {
+                    "type": "tool_end",
+                    "name": t_name,
+                    "duration_ms": t_dur,
+                }
 
-                    content_str = str(chunk.content)
-                    accumulated_text += content_str
-                    yield {"type": "token", "content": content_str}
+            # Check for generated content tokens
+            elif isinstance(chunk, (AIMessageChunk, AIMessage)) and chunk.content:
+                if not ttft_recorded:
+                    t_ttft = round(time.perf_counter() - t0, 3)
+                    ttft_recorded = True
 
-        except Exception as e:
-            res = self.invoke_with_trace(question=question, user_id=user_id, thread_id=thread_id, chat_history=chat_history)
-            accumulated_text = res["output"]
-            tool_calls = res["tool_calls"]
+                if isinstance(chunk.content, str):
+                    full_tokens.append(chunk.content)
+                    yield {"type": "token", "content": chunk.content}
+                elif isinstance(chunk.content, list):
+                    for part in chunk.content:
+                        if isinstance(part, str):
+                            full_tokens.append(part)
+                            yield {"type": "token", "content": part}
+                        elif isinstance(part, dict) and "text" in part:
+                            full_tokens.append(part["text"])
+                            yield {"type": "token", "content": part["text"]}
 
-        total_latency = round(time.perf_counter() - t0, 3)
-        ttft_val = round(first_token_time - t0, 3) if first_token_time else total_latency
+        # Final Telemetry
+        t_total = round(time.perf_counter() - t0, 3)
+        final_output = "".join(full_tokens).strip()
 
         telemetry = {
-            "total_seconds": total_latency,
-            "ttft_seconds": ttft_val,
-            "memory_retrieval_ms": t_mem_elapsed,
-            "tool_count": len(tool_calls),
-            "tool_calls": tool_calls,
+            "total_latency_seconds": t_total,
+            "ttft_seconds": t_ttft or t_total,
+            "memory_recall_ms": t_mem,
+            "tools_count": len(active_tools_called),
+            "tool_calls": active_tools_called,
         }
 
         yield {
             "type": "complete",
-            "output": accumulated_text,
-            "tool_calls": tool_calls,
+            "output": final_output,
             "telemetry": telemetry,
-            "user_id": user_id,
-            "thread_id": thread_id,
         }
+
+    def ask(
+        self,
+        query: str,
+        user_id: str = "default_user",
+        thread_id: str = "default_thread",
+    ) -> str:
+        """Standard synchronous invocation returning final answer text."""
+        res = self.invoke_with_trace(query, user_id=user_id, thread_id=thread_id)
+        return res.get("output", "")
 
     def invoke_with_trace(
         self,
-        question: str,
+        query: str,
         user_id: str = "default_user",
-        thread_id: str = "main_session",
-        chat_history: Optional[List[BaseMessage]] = None,
+        thread_id: str = "default_thread",
     ) -> Dict[str, Any]:
         """
-        Synchronous execution with telemetry timing.
+        Synchronous invocation returning structured output with latency metrics.
         """
         t0 = time.perf_counter()
-        config = {
-            "configurable": {
-                "thread_id": thread_id,
-            }
-        }
-
         t_mem_start = time.perf_counter()
-        memories = self.chroma_conn.recall_user_memories(user_id=user_id, n_results=3)
-        t_mem_elapsed = round((time.perf_counter() - t_mem_start) * 1000, 1)
+        user_memories = []
+        try:
+            user_memories = self.chroma_conn.recall_user_memories(user_id=user_id, query="")
+        except Exception:
+            pass
+        t_mem = round((time.perf_counter() - t_mem_start) * 1000, 1)
 
-        context_prefix = ""
-        if memories:
-            mem_bullets = "\n".join(f"- {m['memory']}" for m in memories)
-            context_prefix = f"[User '{user_id}' Preferences:\n{mem_bullets}]\n\n"
+        memory_context = ""
+        if user_memories:
+            memory_context = f"\n[User Persistent Preferences]:\n" + "\n".join(f"- {m}" for m in user_memories[:3])
 
-        prompt_input = f"{context_prefix}{question}"
+        augmented_query = query + memory_context if memory_context else query
+        config = {"configurable": {"thread_id": thread_id}}
+        messages = [HumanMessage(content=augmented_query)]
 
-        messages = []
-        if chat_history:
-            messages.extend(chat_history)
-        messages.append(HumanMessage(content=prompt_input))
+        response = self._agent_graph.invoke({"messages": messages}, config=config)
 
-        t_graph_start = time.perf_counter()
-        response_state = self._agent_graph.invoke(
-            {"messages": messages},
-            config=config,
-        )
-        t_graph_elapsed = round((time.perf_counter() - t_graph_start) * 1000, 1)
-        all_msgs = response_state.get("messages", [])
+        t_total = round(time.perf_counter() - t0, 3)
 
-        final_answer = ""
-        for m in reversed(all_msgs):
-            if isinstance(m, AIMessage) and m.content:
-                final_answer = m.content
-                break
-            elif getattr(m, "role", None) == "assistant" and getattr(m, "content", None):
-                final_answer = m.content
-                break
-
+        # Extract final answer
+        all_msgs = response.get("messages", [])
+        final_output = ""
         tool_calls = []
-        for m in all_msgs:
-            if getattr(m, "tool_calls", None):
-                for tc in m.tool_calls:
-                    tool_calls.append({
-                        "name": tc.get("name"),
-                        "args": tc.get("args"),
-                        "id": tc.get("id"),
-                    })
 
-        total_latency_seconds = round(time.perf_counter() - t0, 3)
+        for m in reversed(all_msgs):
+            if isinstance(m, AIMessage) and m.content and not final_output:
+                if isinstance(m.content, str):
+                    final_output = m.content
+                elif isinstance(m.content, list):
+                    final_output = "\n".join(str(p.get("text", p) if isinstance(p, dict) else p) for p in m.content)
+            if hasattr(m, "tool_calls") and m.tool_calls:
+                for tc in m.tool_calls:
+                    tool_calls.append(tc.get("name"))
 
         return {
-            "output": final_answer,
-            "messages": all_msgs,
+            "output": final_output,
             "tool_calls": tool_calls,
-            "user_id": user_id,
-            "thread_id": thread_id,
-            "memories_recalled": len(memories),
             "telemetry": {
-                "total_seconds": total_latency_seconds,
-                "memory_retrieval_ms": t_mem_elapsed,
-                "graph_execution_ms": t_graph_elapsed,
-                "tool_count": len(tool_calls),
+                "total_latency_seconds": t_total,
+                "memory_recall_ms": t_mem,
+                "tools_count": len(tool_calls),
             }
         }
